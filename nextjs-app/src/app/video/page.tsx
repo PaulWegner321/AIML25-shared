@@ -1,0 +1,193 @@
+'use client';
+
+import { useState, useRef, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle, Loader2, Camera, CameraOff } from 'lucide-react';
+
+export default function VideoDemo() {
+  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
+  const [translation, setTranslation] = useState('');
+  const [feedback, setFeedback] = useState('');
+  const [score, setScore] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Clean up camera stream when component unmounts
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  const toggleCamera = async () => {
+    if (isCameraOn) {
+      // Turn off camera
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      setIsCameraOn(false);
+    } else {
+      // Turn on camera
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        streamRef.current = stream;
+        setIsCameraOn(true);
+        setError(null);
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setError('Failed to access camera. Please make sure you have granted camera permissions.');
+      }
+    }
+  };
+
+  const startTranslation = async () => {
+    if (!isCameraOn) {
+      setError('Please turn on the camera first.');
+      return;
+    }
+
+    setIsTranslating(true);
+    setError(null);
+
+    try {
+      // In a real implementation, you would capture frames from the video
+      // and send them to the backend for ASL detection and translation
+      
+      // For now, we'll use a mock implementation
+      setTimeout(() => {
+        // Mock translation
+        setTranslation('Hello, this is a mock translation from the video feed.');
+        
+        // Mock feedback
+        setFeedback('Good translation! The signs were clearly visible and well-formed.');
+        setScore(0.9);
+        
+        setIsTranslating(false);
+      }, 2000);
+    } catch (error) {
+      console.error('Translation error:', error);
+      setError('Failed to translate video feed. Please try again.');
+      setIsTranslating(false);
+    }
+  };
+
+  return (
+    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+      <div className="z-10 max-w-5xl w-full items-center justify-between font-mono text-sm">
+        <Card className="w-full">
+          <CardHeader>
+            <CardTitle>Video ASL Translation</CardTitle>
+            <CardDescription>
+              Use your camera to perform ASL signs and get real-time translation.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid w-full items-center gap-4">
+              <div className="flex flex-col space-y-1.5">
+                <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden">
+                  {isCameraOn ? (
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                      Camera is off
+                    </div>
+                  )}
+                </div>
+                <div className="flex justify-center mt-4">
+                  <Button
+                    onClick={toggleCamera}
+                    variant={isCameraOn ? "destructive" : "default"}
+                    className="w-40"
+                  >
+                    {isCameraOn ? (
+                      <>
+                        <CameraOff className="mr-2 h-4 w-4" />
+                        Turn Off Camera
+                      </>
+                    ) : (
+                      <>
+                        <Camera className="mr-2 h-4 w-4" />
+                        Turn On Camera
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              {translation && (
+                <div className="flex flex-col space-y-1.5">
+                  <h3 className="text-sm font-medium">Translation</h3>
+                  <Textarea
+                    value={translation}
+                    readOnly
+                    className="min-h-[100px]"
+                  />
+                </div>
+              )}
+
+              {feedback && (
+                <div className="flex flex-col space-y-1.5">
+                  <h3 className="text-sm font-medium">Feedback</h3>
+                  <Textarea
+                    value={feedback}
+                    readOnly
+                    className="min-h-[100px]"
+                  />
+                </div>
+              )}
+
+              {score !== null && (
+                <div className="flex flex-col space-y-1.5">
+                  <h3 className="text-sm font-medium">Score</h3>
+                  <div className="p-2 bg-gray-100 rounded-md">
+                    {(score * 100).toFixed(1)}%
+                  </div>
+                </div>
+              )}
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+          </CardContent>
+          <CardFooter>
+            <Button
+              onClick={startTranslation}
+              disabled={isTranslating || !isCameraOn}
+              className="w-full"
+            >
+              {isTranslating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Start Translation'
+              )}
+            </Button>
+          </CardFooter>
+        </Card>
+      </div>
+    </main>
+  );
+} 
