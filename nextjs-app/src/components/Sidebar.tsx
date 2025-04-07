@@ -1,6 +1,8 @@
+'use client';
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Video, Settings, HelpCircle } from 'lucide-react';
+import { Video, Settings } from 'lucide-react';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -8,11 +10,10 @@ export function Sidebar() {
   const navItems = [
     { path: '/', label: 'Live Translate', icon: Video },
     { path: '/settings', label: 'Settings', icon: Settings },
-    { path: '/help', label: 'Help', icon: HelpCircle },
   ];
 
   return (
-    <aside className="w-64 bg-white shadow-lg">
+    <aside className="w-64 bg-white shadow-lg h-screen">
       <div className="p-6">
         <h1 className="text-2xl font-bold text-gray-800">ASL Translator</h1>
       </div>
