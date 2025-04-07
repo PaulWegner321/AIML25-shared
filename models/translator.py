@@ -1,65 +1,53 @@
-from typing import List, Dict
-from config.watsonx_client import watsonx_client
+import os
+from typing import List, Dict, Any
+from dotenv import load_dotenv
+from ibm_watson_machine_learning.foundation_models import Model
+from ibm_watson_machine_learning.metanames import GenTextParamsMetaNames as MetaNames
 
-class ASLTranslator:
+# Load environment variables
+load_dotenv()
+
+class Translator:
     def __init__(self):
-        """Initialize the ASL translator with Watsonx client."""
-        self.client = watsonx_client
-    
-    def translate_tokens(self, tokens: List[str]) -> str:
         """
-        Translate ASL tokens to English using Watsonx.
+        Initialize the translator with Watsonx LLM.
+        """
+        self.api_key = os.getenv("WATSONX_API_KEY")
+        self.project_id = os.getenv("WATSONX_PROJECT_ID")
+        self.url = os.getenv("WATSONX_URL")
         
-        Args:
-            tokens: List of ASL tokens to translate
-            
-        Returns:
-            Translated English text
-        """
-        try:
-            translated_text = self.client.translate(tokens)
-            return translated_text
-        except Exception as e:
-            raise Exception(f"Translation failed: {str(e)}")
-    
-    def translate_with_context(self, tokens: List[str], context: Dict[str, str]) -> str:
-        """
-        Translate ASL tokens with additional context using Watsonx.
-        
-        Args:
-            tokens: List of ASL tokens to translate
-            context: Dictionary of additional context (e.g., domain, style)
-            
-        Returns:
-            Translated English text with context consideration
-        """
-        try:
-            # Add context to the translation request
-            context_str = ", ".join(f"{k}: {v}" for k, v in context.items())
-            tokens_with_context = tokens + [f"Context: {context_str}"]
-            translated_text = self.client.translate(tokens_with_context)
-            return translated_text
-        except Exception as e:
-            raise Exception(f"Contextual translation failed: {str(e)}")
-    
-    def batch_translate(self, token_sequences: List[List[str]]) -> List[str]:
-        """
-        Translate multiple sequences of ASL tokens.
-        
-        Args:
-            token_sequences: List of token lists to translate
-            
-        Returns:
-            List of translated English texts
-        """
-        try:
-            translations = []
-            for tokens in token_sequences:
-                translated_text = self.translate_tokens(tokens)
-                translations.append(translated_text)
-            return translations
-        except Exception as e:
-            raise Exception(f"Batch translation failed: {str(e)}")
+        # Initialize Watsonx model
+        # For now, we'll just set up the structure
+        # In the future, this will initialize the actual model
+        # self.model = Model(
+        #     model_id="meta-llama/Llama-2-70b-chat-hf",
+        #     credentials={
+        #         "apikey": self.api_key,
+        #         "url": self.url
+        #     },
+        #     project_id=self.project_id
+        # )
 
-# Create a singleton instance
-translator = ASLTranslator() 
+    def translate(self, tokens: List[str]) -> str:
+        """
+        Translate ASL tokens to text using Watsonx LLM.
+        
+        Args:
+            tokens: A list of ASL tokens.
+            
+        Returns:
+            The translated text.
+        """
+        # For now, return a dummy translation
+        # In the future, this will use the Watsonx model
+        # prompt = f"Translate the following ASL tokens to English: {', '.join(tokens)}"
+        # parameters = {
+        #     MetaNames.DECODING_METHOD: "greedy",
+        #     MetaNames.MAX_NEW_TOKENS: 100,
+        #     MetaNames.MIN_NEW_TOKENS: 1,
+        #     MetaNames.STOP_SEQUENCES: ["\n\n"]
+        # }
+        # response = self.model.generate(prompt, parameters)
+        # return response.generated_text
+        
+        return f"This is a dummy translation for the ASL tokens: {', '.join(tokens)}" 

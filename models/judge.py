@@ -1,73 +1,68 @@
-from typing import List, Dict
-from config.watsonx_client import watsonx_client
+import os
+from typing import List, Dict, Any, Tuple
+from dotenv import load_dotenv
+from ibm_watson_machine_learning.foundation_models import Model
+from ibm_watson_machine_learning.metanames import GenTextParamsMetaNames as MetaNames
 
-class TranslationJudge:
+# Load environment variables
+load_dotenv()
+
+class Judge:
     def __init__(self):
-        """Initialize the translation judge with Watsonx client."""
-        self.client = watsonx_client
-    
-    def judge_translation(self, tokens: List[str], translated_text: str) -> Dict:
         """
-        Evaluate the quality of an ASL translation.
+        Initialize the judge with Watsonx LLM.
+        """
+        self.api_key = os.getenv("WATSONX_API_KEY")
+        self.project_id = os.getenv("WATSONX_PROJECT_ID")
+        self.url = os.getenv("WATSONX_URL")
         
-        Args:
-            tokens: Original ASL tokens
-            translated_text: The translated English text
-            
-        Returns:
-            Dictionary containing score and suggestions
-        """
-        try:
-            judgment = self.client.judge_translation(tokens, translated_text)
-            return judgment
-        except Exception as e:
-            raise Exception(f"Translation judgment failed: {str(e)}")
-    
-    def judge_with_criteria(self, tokens: List[str], translated_text: str, 
-                          criteria: Dict[str, float]) -> Dict:
-        """
-        Evaluate translation with specific criteria weights.
-        
-        Args:
-            tokens: Original ASL tokens
-            translated_text: The translated English text
-            criteria: Dictionary of criteria and their weights (e.g., {"accuracy": 0.6, "fluency": 0.4})
-            
-        Returns:
-            Dictionary containing detailed scores and suggestions
-        """
-        try:
-            # Add criteria to the judgment request
-            criteria_str = ", ".join(f"{k}: {v}" for k, v in criteria.items())
-            judgment = self.client.judge_translation(
-                tokens + [f"Criteria: {criteria_str}"], 
-                translated_text
-            )
-            return judgment
-        except Exception as e:
-            raise Exception(f"Criteria-based judgment failed: {str(e)}")
-    
-    def batch_judge(self, translations: List[Dict[str, str]]) -> List[Dict]:
-        """
-        Evaluate multiple translations.
-        
-        Args:
-            translations: List of dictionaries containing tokens and translated_text
-            
-        Returns:
-            List of judgment results
-        """
-        try:
-            judgments = []
-            for translation in translations:
-                judgment = self.judge_translation(
-                    translation["tokens"],
-                    translation["translated_text"]
-                )
-                judgments.append(judgment)
-            return judgments
-        except Exception as e:
-            raise Exception(f"Batch judgment failed: {str(e)}")
+        # Initialize Watsonx model
+        # For now, we'll just set up the structure
+        # In the future, this will initialize the actual model
+        # self.model = Model(
+        #     model_id="meta-llama/Llama-2-70b-chat-hf",
+        #     credentials={
+        #         "apikey": self.api_key,
+        #         "url": self.url
+        #     },
+        #     project_id=self.project_id
+        # )
 
-# Create a singleton instance
-judge = TranslationJudge() 
+    def evaluate(self, translation: str, tokens: List[str]) -> Tuple[str, float]:
+        """
+        Evaluate a translation using Watsonx LLM.
+        
+        Args:
+            translation: The translation to evaluate.
+            tokens: The original ASL tokens.
+            
+        Returns:
+            A tuple containing feedback and a score.
+        """
+        # For now, return dummy feedback and score
+        # In the future, this will use the Watsonx model
+        # prompt = f"""
+        # Evaluate the following ASL translation:
+        # 
+        # Original ASL tokens: {', '.join(tokens)}
+        # Translation: {translation}
+        # 
+        # Provide feedback on the accuracy and quality of the translation, and assign a score from 0.0 to 1.0.
+        # """
+        # parameters = {
+        #     MetaNames.DECODING_METHOD: "greedy",
+        #     MetaNames.MAX_NEW_TOKENS: 200,
+        #     MetaNames.MIN_NEW_TOKENS: 1,
+        #     MetaNames.STOP_SEQUENCES: ["\n\n"]
+        # }
+        # response = self.model.generate(prompt, parameters)
+        # 
+        # # Parse the response to extract feedback and score
+        # # This is a simplified example and would need to be adapted based on the actual response format
+        # feedback = response.generated_text
+        # score = 0.75  # In a real implementation, this would be extracted from the response
+        
+        feedback = "This is a dummy feedback for the translation."
+        score = 0.75
+        
+        return feedback, score 

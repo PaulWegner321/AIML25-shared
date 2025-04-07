@@ -1,95 +1,88 @@
-from typing import List, Dict
-from langchain.vectorstores import Chroma
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.document_loaders import TextLoader
 import os
+from typing import List, Dict, Any
+from dotenv import load_dotenv
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.vectorstores import FAISS
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.document_loaders import TextLoader, DirectoryLoader
+
+# Load environment variables
+load_dotenv()
 
 class RAGPipeline:
-    def __init__(self, vector_db_path: str = "vector_db"):
+    def __init__(self, vector_store_path: str = "vector_store"):
         """
         Initialize the RAG pipeline.
         
         Args:
-            vector_db_path: Path to store the vector database
+            vector_store_path: Path to the vector store.
         """
-        self.vector_db_path = vector_db_path
+        self.vector_store_path = vector_store_path
         self.embeddings = HuggingFaceEmbeddings()
         self.vector_store = None
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=1000,
-            chunk_overlap=200
-        )
+        
+        # Initialize the vector store if it exists
+        if os.path.exists(vector_store_path):
+            self.vector_store = FAISS.load_local(vector_store_path, self.embeddings)
     
-    def initialize_vector_store(self):
-        """Initialize or load the vector store."""
-        if os.path.exists(self.vector_db_path):
-            self.vector_store = Chroma(
-                persist_directory=self.vector_db_path,
-                embedding_function=self.embeddings
-            )
-        else:
-            self.vector_store = Chroma(
-                persist_directory=self.vector_db_path,
-                embedding_function=self.embeddings
-            )
-    
-    def add_documents(self, file_paths: List[str]):
+    def add_documents(self, documents: List[str]):
         """
         Add documents to the vector store.
         
         Args:
-            file_paths: List of paths to text files
+            documents: A list of documents to add.
         """
-        if not self.vector_store:
-            self.initialize_vector_store()
+        # Split documents into chunks
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200
+        )
+        chunks = text_splitter.create_documents(documents)
         
-        for file_path in file_paths:
-            loader = TextLoader(file_path)
-            documents = loader.load()
-            texts = self.text_splitter.split_documents(documents)
-            self.vector_store.add_documents(texts)
-        self.vector_store.persist()
+        # Create or update the vector store
+        if self.vector_store is None:
+            self.vector_store = FAISS.from_documents(chunks, self.embeddings)
+        else:
+            self.vector_store.add_documents(chunks)
+        
+        # Save the vector store
+        self.vector_store.save_local(self.vector_store_path)
     
-    def query(self, query: str, k: int = 3) -> List[Dict]:
+    def add_documents_from_directory(self, directory: str):
         """
-        Query the vector store for relevant context.
+        Add documents from a directory to the vector store.
         
         Args:
-            query: The search query
-            k: Number of results to return
-            
-        Returns:
-            List of relevant documents with their metadata
+            directory: Path to the directory containing documents.
         """
-        if not self.vector_store:
-            self.initialize_vector_store()
+        # Load documents from the directory
+        loader = DirectoryLoader(directory, glob="**/*.txt", loader_cls=TextLoader)
+        documents = loader.load()
         
-        results = self.vector_store.similarity_search_with_score(query, k=k)
-        return [
-            {
-                "content": doc.page_content,
-                "metadata": doc.metadata,
-                "score": score
-            }
-            for doc, score in results
-        ]
+        # Extract text from documents
+        texts = [doc.page_content for doc in documents]
+        
+        # Add documents to the vector store
+        self.add_documents(texts)
     
-    def get_context_for_translation(self, tokens: List[str], k: int = 3) -> str:
+    def query(self, query: str, k: int = 5) -> List[str]:
         """
-        Get relevant context for ASL translation.
+        Query the vector store.
         
         Args:
-            tokens: List of ASL tokens
-            k: Number of context documents to retrieve
+            query: The query to search for.
+            k: The number of results to return.
             
         Returns:
-            Concatenated context string
+            A list of relevant documents.
         """
-        query = " ".join(tokens)
-        results = self.query(query, k=k)
-        context = "\n".join(result["content"] for result in results)
-        return context
-
-# Create a singleton instance
-rag_pipeline = RAGPipeline() 
+        if self.vector_store is None:
+            return []
+        
+        # Search the vector store
+        results = self.vector_store.similarity_search(query, k=k)
+        
+        # Extract text from results
+        texts = [doc.page_content for doc in results]
+        
+        return texts 

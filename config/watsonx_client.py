@@ -2,81 +2,57 @@ import os
 from dotenv import load_dotenv
 from ibm_watson_machine_learning.foundation_models import Model
 from ibm_watson_machine_learning.metanames import GenTextParamsMetaNames as MetaNames
+from typing import List
 
 # Load environment variables
 load_dotenv()
 
 class WatsonxClient:
     def __init__(self):
-        """Initialize the Watsonx client with credentials."""
+        """
+        Initialize the Watsonx client.
+        """
         self.api_key = os.getenv("WATSONX_API_KEY")
         self.project_id = os.getenv("WATSONX_PROJECT_ID")
-        self.model_id = os.getenv("WATSONX_MODEL_ID")
-        self.url = os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")  # Default to US South if not specified
+        self.url = os.getenv("WATSONX_URL")
         
-        if not all([self.api_key, self.project_id, self.model_id]):
-            raise ValueError("Missing required Watsonx credentials in environment variables")
+        if not self.api_key or not self.project_id or not self.url:
+            raise ValueError("Missing Watsonx credentials. Please check your .env file.")
         
-        self.model = self._initialize_model()
+        # Initialize Watsonx model
+        # For now, we'll just set up the structure
+        # In the future, this will initialize the actual model
+        # self.model = Model(
+        #     model_id="meta-llama/Llama-2-70b-chat-hf",
+        #     credentials={
+        #         "apikey": self.api_key,
+        #         "url": self.url
+        #     },
+        #     project_id=self.project_id
+        # )
     
-    def _initialize_model(self):
-        """Initialize the Watsonx model with credentials."""
-        try:
-            model = Model(
-                model_id=self.model_id,
-                credentials={
-                    "apikey": self.api_key,
-                    "url": self.url
-                },
-                project_id=self.project_id
-            )
-            return model
-        except Exception as e:
-            raise Exception(f"Failed to initialize Watsonx model: {str(e)}")
-    
-    def translate(self, tokens: list) -> str:
-        """Translate ASL tokens to English using Watsonx."""
-        prompt = f"Convert the following ASL tokens into fluent English: {', '.join(tokens)}"
+    def generate(self, prompt: str, max_tokens: int = 100, min_tokens: int = 1, stop_sequences: List[str] = None) -> str:
+        """
+        Generate text using Watsonx LLM.
         
-        parameters = {
-            MetaNames.DECODING_METHOD: "greedy",
-            MetaNames.MAX_NEW_TOKENS: 100,
-            MetaNames.MIN_NEW_TOKENS: 1,
-            MetaNames.STOP_SEQUENCES: ["\n\n"],
-            MetaNames.REPETITION_PENALTY: 1
-        }
+        Args:
+            prompt: The prompt to generate text from.
+            max_tokens: The maximum number of tokens to generate.
+            min_tokens: The minimum number of tokens to generate.
+            stop_sequences: A list of sequences to stop generation at.
+            
+        Returns:
+            The generated text.
+        """
+        # For now, return a dummy response
+        # In the future, this will use the Watsonx model
+        # parameters = {
+        #     MetaNames.DECODING_METHOD: "greedy",
+        #     MetaNames.MAX_NEW_TOKENS: max_tokens,
+        #     MetaNames.MIN_NEW_TOKENS: min_tokens,
+        #     MetaNames.STOP_SEQUENCES: stop_sequences or ["\n\n"]
+        # }
+        # response = self.model.generate(prompt, parameters)
+        # return response.generated_text
         
-        try:
-            response = self.model.generate(prompt, parameters)
-            return response.generated_text
-        except Exception as e:
-            raise Exception(f"Translation failed: {str(e)}")
-    
-    def judge_translation(self, tokens: list, translated_text: str) -> dict:
-        """Judge the quality of the translation using Watsonx."""
-        prompt = f"""Evaluate the following ASL to English translation:
-        Original tokens: {', '.join(tokens)}
-        Translated text: {translated_text}
-        
-        Provide a score from 1-10 and specific suggestions for improvement."""
-        
-        parameters = {
-            MetaNames.DECODING_METHOD: "greedy",
-            MetaNames.MAX_NEW_TOKENS: 150,
-            MetaNames.MIN_NEW_TOKENS: 1,
-            MetaNames.STOP_SEQUENCES: ["\n\n"],
-            MetaNames.REPETITION_PENALTY: 1
-        }
-        
-        try:
-            response = self.model.generate(prompt, parameters)
-            # TODO: Parse the response to extract score and suggestions
-            return {
-                "score": 8.5,  # Placeholder
-                "suggestions": response.generated_text
-            }
-        except Exception as e:
-            raise Exception(f"Judgment failed: {str(e)}")
-
-# Create a singleton instance
-watsonx_client = WatsonxClient() 
+        return f"This is a dummy response to the prompt: {prompt}" 
