@@ -26,6 +26,42 @@ export default function VideoDemo() {
     };
   }, []);
 
+  // Initialize video element
+  useEffect(() => {
+    let mounted = true;
+    
+    const setupVideoElement = async () => {
+      if (videoRef.current && isCameraOn) {
+        const videoElement = videoRef.current;
+        
+        // Set initial video element properties
+        videoElement.autoplay = true;
+        videoElement.playsInline = true;
+        videoElement.muted = true;
+
+        // If we have a stream, set it up
+        if (streamRef.current) {
+          try {
+            videoElement.srcObject = streamRef.current;
+            await videoElement.play();
+          } catch (error) {
+            console.error("Error playing video:", error);
+          }
+        }
+      }
+    };
+
+    setupVideoElement();
+
+    // Cleanup function
+    return () => {
+      mounted = false;
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    };
+  }, [isCameraOn]);
+
   const toggleCamera = async () => {
     if (isCameraOn) {
       // Turn off camera
@@ -33,20 +69,31 @@ export default function VideoDemo() {
         streamRef.current.getTracks().forEach(track => track.stop());
         streamRef.current = null;
       }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
       setIsCameraOn(false);
     } else {
       // Turn on camera
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-        }
+        const constraints = {
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: 'user',
+            frameRate: { ideal: 30 }
+          },
+          audio: false
+        };
+        
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         streamRef.current = stream;
         setIsCameraOn(true);
         setError(null);
       } catch (error) {
         console.error('Error accessing camera:', error);
         setError('Failed to access camera. Please make sure you have granted camera permissions.');
+        setIsCameraOn(false);
       }
     }
   };
@@ -95,14 +142,26 @@ export default function VideoDemo() {
           <CardContent>
             <div className="grid w-full items-center gap-4">
               <div className="flex flex-col space-y-1.5">
-                <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden">
+                <div className="aspect-video bg-gray-100 rounded-lg overflow-hidden relative">
                   {isCameraOn ? (
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      className="w-full h-full object-cover"
-                    />
+                    <>
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          backgroundColor: 'black',
+                          transform: 'scaleX(-1)' // Mirror the video
+                        }}
+                      />
+                      <div className="absolute top-2 right-2 text-xs text-white bg-black/50 px-2 py-1 rounded">
+                        Stream Active
+                      </div>
+                    </>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-gray-400">
                       Camera is off
