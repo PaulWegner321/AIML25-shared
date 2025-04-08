@@ -9,12 +9,20 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Initialize FastAPI app
-app = FastAPI(title="ASL Translation API")
+app = FastAPI(
+    title="ASL Translation API",
+    description="API for ASL detection, translation, and evaluation",
+    version="1.0.0"
+)
+
+# Get environment variables
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://asltranslate-c8qu1q97f-henriks-projects-f6f15939.vercel.app")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with your frontend URL
+    allow_origins=[FRONTEND_URL] if ENVIRONMENT == "production" else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,7 +58,11 @@ class JudgmentResponse(BaseModel):
 
 @app.get("/")
 async def root():
-    return {"message": "ASL Translation API"}
+    return {
+        "message": "ASL Translation API",
+        "status": "healthy",
+        "environment": ENVIRONMENT
+    }
 
 @app.post("/translate", response_model=TranslationResponse)
 async def translate(request: TranslationRequest):
@@ -77,4 +89,5 @@ async def judge(request: JudgmentRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    port = int(os.getenv("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port) 
