@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertCircle, Loader2, Camera, CameraOff } from 'lucide-react';
+import { API_CONFIG } from '@/config/api';
 
 export default function VideoDemo() {
   const [isCameraOn, setIsCameraOn] = useState(false);
@@ -108,23 +109,49 @@ export default function VideoDemo() {
     setError(null);
 
     try {
-      // In a real implementation, you would capture frames from the video
-      // and send them to the backend for ASL detection and translation
+      // TODO: Implement frame capture and ASL detection
+      // For now, we'll use dummy tokens
+      const dummyTokens = ['hello', 'world'];
       
-      // For now, we'll use a mock implementation
-      setTimeout(() => {
-        // Mock translation
-        setTranslation('Hello, this is a mock translation from the video feed.');
-        
-        // Mock feedback
-        setFeedback('Good translation! The signs were clearly visible and well-formed.');
-        setScore(0.9);
-        
-        setIsTranslating(false);
-      }, 2000);
+      // Call the translation API
+      const translationResponse = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.TRANSLATE}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ tokens: dummyTokens }),
+      });
+
+      if (!translationResponse.ok) {
+        throw new Error('Translation request failed');
+      }
+
+      const translationData = await translationResponse.json();
+      setTranslation(translationData.translation);
+
+      // Call the judge API
+      const judgeResponse = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.JUDGE}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          translation: translationData.translation,
+          tokens: dummyTokens,
+        }),
+      });
+
+      if (!judgeResponse.ok) {
+        throw new Error('Judgment request failed');
+      }
+
+      const judgeData = await judgeResponse.json();
+      setFeedback(judgeData.feedback);
+      setScore(judgeData.score);
     } catch (error) {
       console.error('Translation error:', error);
       setError('Failed to translate video feed. Please try again.');
+    } finally {
       setIsTranslating(false);
     }
   };
