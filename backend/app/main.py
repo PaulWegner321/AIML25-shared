@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 import numpy as np
 from PIL import Image
 import io
+import sys
 
 # Load environment variables
 load_dotenv()
@@ -56,7 +57,8 @@ class VideoFrameResponse(BaseModel):
     letter: str
     confidence: float
 
-# Import model modules
+# Add the parent directory to the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from models.asl_detector import ASLDetector
 
 # Initialize model instances
