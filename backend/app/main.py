@@ -1,9 +1,12 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any
 import os
 from dotenv import load_dotenv
+import numpy as np
+from PIL import Image
+import io
 
 # Load environment variables
 load_dotenv()
@@ -49,17 +52,15 @@ class JudgmentResponse(BaseModel):
     feedback: str
     score: float
 
-# Import model modules (to be implemented)
-# from models.asl_detector import ASLDetector
-# from models.translator import Translator
-# from models.judge import Judge
-# from models.rag_pipeline import RAGPipeline
+class VideoFrameResponse(BaseModel):
+    letter: str
+    confidence: float
 
-# Initialize model instances (to be implemented)
-# asl_detector = ASLDetector()
-# translator = Translator()
-# judge = Judge()
-# rag_pipeline = RAGPipeline()
+# Import model modules
+from models.asl_detector import ASLDetector
+
+# Initialize model instances
+asl_detector = ASLDetector()
 
 @app.get("/")
 async def root():
@@ -74,7 +75,6 @@ async def translate(request: TranslationRequest):
     try:
         # For now, return a dummy translation
         # In the future, use the translator model
-        # translation = translator.translate(request.tokens)
         translation = f"Dummy translation for tokens: {', '.join(request.tokens)}"
         return TranslationResponse(translation=translation)
     except Exception as e:
@@ -85,12 +85,36 @@ async def judge(request: JudgmentRequest):
     try:
         # For now, return dummy feedback
         # In the future, use the judge model
-        # feedback, score = judge.evaluate(request.translation, request.tokens)
         feedback = "This is a dummy feedback for the translation."
         score = 0.75
         return JudgmentResponse(feedback=feedback, score=score)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/process-frame", response_model=VideoFrameResponse)
+async def process_frame(file: UploadFile = File(...)):
+    try:
+        # Read the image file
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        
+        # Convert to numpy array for processing
+        image_array = np.array(image)
+        
+        # Get prediction from ASL detector
+        predictions = asl_detector.detect(image_array)
+        
+        if not predictions:
+            raise HTTPException(status_code=400, detail="No ASL letter detected in the frame")
+            
+        # Return the first prediction (we're only processing one frame at a time)
+        letter, confidence = predictions[0]
+        return VideoFrameResponse(
+            letter=letter,
+            confidence=confidence
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process frame: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

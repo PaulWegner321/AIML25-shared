@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -70,7 +70,7 @@ class ASLDetector:
         image_tensor = self.transform(image).unsqueeze(0)
         return image_tensor.to(self.device)
 
-    def detect(self, image) -> List[str]:
+    def detect(self, image) -> List[Tuple[str, float]]:
         """
         Detect ASL tokens in an image.
         
@@ -78,7 +78,7 @@ class ASLDetector:
             image: PIL Image or numpy array
             
         Returns:
-            A list containing the predicted ASL letter.
+            A list of tuples containing (predicted_letter, confidence_score)
         """
         with torch.no_grad():
             # Preprocess image
@@ -91,11 +91,12 @@ class ASLDetector:
             # Get predicted class and confidence
             confidence, predicted = torch.max(probabilities, 1)
             predicted_letter = self.labels[predicted.item()]
+            confidence_score = confidence.item()
             
-            # Return as a list to maintain compatibility with existing interface
-            return [predicted_letter]
+            # Return as a list of tuples to maintain compatibility with existing interface
+            return [(predicted_letter, confidence_score)]
 
-    def process_video(self, video) -> List[List[str]]:
+    def process_video(self, video) -> List[List[Tuple[str, float]]]:
         """
         Process a video and detect ASL tokens in each frame.
         
@@ -103,7 +104,7 @@ class ASLDetector:
             video: List of frames (PIL Images or numpy arrays)
             
         Returns:
-            A list of lists of ASL tokens, one list per frame.
+            A list of lists of (letter, confidence) tuples, one list per frame.
         """
         results = []
         for frame in video:
