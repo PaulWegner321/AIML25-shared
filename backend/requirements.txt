@@ -5,4 +5,8 @@ pydantic==2.4.2
 ibm-watson-machine-learning==1.0.327
 langchain==0.0.335
 faiss-cpu==1.7.4
-chromadb==0.4.15 
+chromadb==0.4.15
+torch==2.1.0
+torchvision==0.16.0
+numpy==1.24.3
+Pillow==10.0.0 
