@@ -4,9 +4,13 @@ services:
     env: python
     buildCommand: |
       pip install -r requirements.txt
-      mkdir -p /opt/render/project/src/models
-      cp -r models/* /opt/render/project/src/models/
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+      mkdir -p /opt/render/project/src/backend/models
+      cp -r models/* /opt/render/project/src/backend/models/
+      ln -s /opt/render/project/src/backend/models /opt/render/project/src/models
+    startCommand: |
+      python app/check_model.py
+      python app/fix_imports.py
+      uvicorn app.main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.0

@@ -57,8 +57,12 @@ class VideoFrameResponse(BaseModel):
     letter: str
     confidence: float
 
-# Add the parent directory to the Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Get the absolute path to the backend directory
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Add the backend directory to the Python path
+sys.path.insert(0, BACKEND_DIR)
+
+# Now import the ASL detector
 from models.asl_detector import ASLDetector
 
 # Initialize model instances
