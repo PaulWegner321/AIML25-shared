@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 import numpy as np
@@ -14,8 +14,8 @@ load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="ASL Translation API",
-    description="API for ASL detection, translation, and evaluation",
+    title="ASL Learning Platform API",
+    description="API for ASL learning platform with sign evaluation and description capabilities.",
     version="1.0.0"
 )
 
@@ -57,6 +57,21 @@ class VideoFrameResponse(BaseModel):
     letter: str
     confidence: float
 
+class SignEvaluationResponse(BaseModel):
+    predicted_sign: str
+    confidence: float
+    feedback: str
+    is_correct: bool
+
+class SignDescriptionResponse(BaseModel):
+    word: str
+    description: str
+    steps: List[str]
+    tips: List[str]
+
+class ErrorResponse(BaseModel):
+    error: str
+
 # Get the absolute path to the backend directory
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # Add the backend directory to the Python path
@@ -65,15 +80,22 @@ sys.path.insert(0, BACKEND_DIR)
 # Now import the ASL detector
 from models.asl_detector import ASLDetector
 
+# Import our models
+from app.models.sign_evaluator import SignEvaluator
+from app.models.rag_description import RAGDescription
+
 # Initialize model instances
 asl_detector = ASLDetector()
+sign_evaluator = SignEvaluator()
+rag_description = RAGDescription()
 
 @app.get("/")
 async def root():
+    """Root endpoint that returns API information."""
     return {
-        "message": "ASL Translation API",
-        "status": "healthy",
-        "environment": ENVIRONMENT
+        "name": "ASL Learning Platform API",
+        "version": "1.0.0",
+        "description": "API for ASL learning platform with sign evaluation and description capabilities."
     }
 
 @app.post("/translate", response_model=TranslationResponse)
@@ -121,6 +143,83 @@ async def process_frame(file: UploadFile = File(...)):
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process frame: {str(e)}")
+
+@app.post("/evaluate-sign", response_model=SignEvaluationResponse, responses={500: {"model": ErrorResponse}})
+async def evaluate_sign(
+    file: UploadFile = File(...),
+    expected_sign: Optional[str] = None
+):
+    """
+    Evaluate an ASL sign from an uploaded image.
+    
+    Args:
+        file: The image file containing the ASL sign
+        expected_sign: The expected sign (optional, for providing feedback)
+        
+    Returns:
+        SignEvaluationResponse: Evaluation results including predicted sign and confidence
+    """
+    try:
+        # Read and validate the image
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        
+        # Convert to RGB if necessary
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        
+        # Get prediction from the model
+        prediction, confidence = sign_evaluator.evaluate_sign(image)
+        
+        # Generate feedback
+        feedback = "Good job!" if confidence > 0.8 else "Try again, make sure your hand is clearly visible."
+        
+        # If expected sign is provided, check if prediction matches
+        is_correct = True
+        if expected_sign:
+            is_correct = prediction.upper() == expected_sign.upper()
+            if not is_correct:
+                feedback = f"Expected '{expected_sign}' but detected '{prediction}'. Try again!"
+        
+        return SignEvaluationResponse(
+            predicted_sign=prediction,
+            confidence=float(confidence),
+            feedback=feedback,
+            is_correct=is_correct
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/sign-description/{word}", response_model=SignDescriptionResponse, responses={500: {"model": ErrorResponse}})
+async def get_sign_description(word: str):
+    """
+    Get a description of how to sign a word in ASL.
+    
+    Args:
+        word: The word to get a description for
+        
+    Returns:
+        SignDescriptionResponse: Description results including steps and tips
+    """
+    try:
+        # Get description from the RAG model
+        description = rag_description.get_sign_description(word)
+        
+        return SignDescriptionResponse(
+            word=description["word"],
+            description=description["description"],
+            steps=description["steps"],
+            tips=description["tips"]
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint."""
+    return {"status": "healthy"}
 
 if __name__ == "__main__":
     import uvicorn
