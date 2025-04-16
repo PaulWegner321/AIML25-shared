@@ -110,7 +110,7 @@ class SignEvaluator:
         image_tensor = self.transform(image)
         return image_tensor.unsqueeze(0)  # Add batch dimension
 
-    def evaluate_sign(self, image, expected_letter):
+    def evaluate_sign(self, image, expected_letter=None):
         """
         Evaluate if the sign in the image matches the expected sign.
         
@@ -119,11 +119,12 @@ class SignEvaluator:
             expected_letter: The expected sign (A-Z)
             
         Returns:
-            dict: Evaluation results including:
-                - correct: Boolean indicating if the sign is correct
+            dict:
                 - predicted_sign: The predicted sign
-                - confidence: Confidence score for the prediction
+                - confidence: Confidence score
                 - feedback: Feedback message
+                - is_correct: Whether the prediction is correct
+                - success: Whether the evaluation was successful
         """
         try:
             # Preprocess image
@@ -141,11 +142,13 @@ class SignEvaluator:
             predicted_letter = self.classes[predicted_class.item()]
             
             # Check if prediction matches expected letter
-            is_correct = predicted_letter == expected_letter.upper()
+            is_correct = True
+            if expected_letter:
+                is_correct = predicted_letter == expected_letter.upper()
             
             # Generate feedback
             if is_correct:
-                feedback = f"Correct! The sign for '{expected_letter}' was recognized with {confidence:.2%} confidence."
+                feedback = f"Correct! The sign for '{expected_letter if expected_letter else predicted_letter}' was recognized with {confidence:.2%} confidence."
             else:
                 feedback = f"Incorrect. The sign was recognized as '{predicted_letter}' with {confidence:.2%} confidence. Expected '{expected_letter}'."
             

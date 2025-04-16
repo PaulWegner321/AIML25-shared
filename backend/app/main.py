@@ -21,7 +21,7 @@ app = FastAPI(
 )
 
 # Get environment variables
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://asltranslate-p4sndxrkd-henriks-projects-f6f15939.vercel.app")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://asl-edu-platform.vercel.app")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 # Add CORS middleware
@@ -30,6 +30,7 @@ app.add_middleware(
     allow_origins=[
         FRONTEND_URL,
         "http://localhost:3000",
+        "https://asl-edu-platform.vercel.app",
         "https://asltranslate-p4sndxrkd-henriks-projects-f6f15939.vercel.app",
         "https://asltranslate-c8qu1q97f-henriks-projects-f6f15939.vercel.app"
     ] if ENVIRONMENT == "production" else ["*"],
@@ -170,23 +171,16 @@ async def evaluate_sign(
             image = image.convert("RGB")
         
         # Get prediction from the model
-        prediction, confidence = sign_evaluator.evaluate_sign(image)
+        result = sign_evaluator.evaluate_sign(image, expected_sign)
         
-        # Generate feedback
-        feedback = "Good job!" if confidence > 0.8 else "Try again, make sure your hand is clearly visible."
-        
-        # If expected sign is provided, check if prediction matches
-        is_correct = True
-        if expected_sign:
-            is_correct = prediction.upper() == expected_sign.upper()
-            if not is_correct:
-                feedback = f"Expected '{expected_sign}' but detected '{prediction}'. Try again!"
+        if not result['success']:
+            raise HTTPException(status_code=500, detail=result['feedback'])
         
         return SignEvaluationResponse(
-            predicted_sign=prediction,
-            confidence=float(confidence),
-            feedback=feedback,
-            is_correct=is_correct
+            predicted_sign=result['predicted_sign'],
+            confidence=result['confidence'],
+            feedback=result['feedback'],
+            is_correct=result['is_correct']
         )
     
     except Exception as e:
