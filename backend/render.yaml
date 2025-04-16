@@ -4,9 +4,8 @@ services:
     env: python
     buildCommand: |
       pip install -r requirements.txt
-      mkdir -p /opt/render/project/src/backend/models
-      cp -r models/* /opt/render/project/src/backend/models/
-      ln -s /opt/render/project/src/backend/models /opt/render/project/src/models
+      mkdir -p /opt/render/project/src/backend/app/models
+      cp -r app/models/* /opt/render/project/src/backend/app/models/
     startCommand: |
       python app/check_model.py
       python app/fix_imports.py

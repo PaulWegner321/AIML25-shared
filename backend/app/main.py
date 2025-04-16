@@ -78,7 +78,7 @@ BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BACKEND_DIR)
 
 # Now import the ASL detector
-from models.asl_detector import ASLDetector
+from app.models.asl_detector import ASLDetector
 
 # Import our models
 from app.models.sign_evaluator import SignEvaluator
