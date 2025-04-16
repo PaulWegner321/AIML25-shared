@@ -13,12 +13,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 class ASLNet(nn.Module):
     def __init__(self):
         super(ASLNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 32, kernel_size=3, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        self.conv1 = nn.Conv2d(1, 32, kernel_size=3)  # Changed from 3 to 1 for grayscale
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
+        self.conv3 = nn.Conv2d(64, 128, kernel_size=3)  # Changed from 64 to 128
+        self.conv4 = nn.Conv2d(128, 128, kernel_size=3)  # Added conv4 layer
         self.pool = nn.MaxPool2d(2, 2)
-        self.fc1 = nn.Linear(128 * 8 * 8, 512)
-        self.fc2 = nn.Linear(512, 26)  # 26 letters in ASL
+        self.fc1 = nn.Linear(1152, 512)  # Changed dimensions to match weights
+        self.fc2 = nn.Linear(512, 26)  # Changed from 64 to 512
         self.dropout = nn.Dropout(0.5)
         
     def forward(self, x):
@@ -35,8 +36,11 @@ class ASLNet(nn.Module):
         x = self.pool(F.relu(self.conv3(x)))
         print(f"After conv3: {x.shape}")
         
+        x = self.pool(F.relu(self.conv4(x)))  # Added conv4 layer
+        print(f"After conv4: {x.shape}")
+        
         # Flatten
-        x = x.view(-1, 128 * 8 * 8)
+        x = x.view(-1, 1152)  # Changed dimensions to match weights
         print(f"After flatten: {x.shape}")
         
         # Apply fully connected layers
