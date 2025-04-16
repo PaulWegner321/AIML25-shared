@@ -27,13 +27,7 @@ ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        FRONTEND_URL,
-        "http://localhost:3000",
-        "https://asl-edu-platform.vercel.app",
-        "https://asltranslate-p4sndxrkd-henriks-projects-f6f15939.vercel.app",
-        "https://asltranslate-c8qu1q97f-henriks-projects-f6f15939.vercel.app"
-    ] if ENVIRONMENT == "production" else ["*"],
+    allow_origins=["*"] if ENVIRONMENT == "production" else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
