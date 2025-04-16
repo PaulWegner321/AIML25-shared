@@ -39,10 +39,12 @@ export default function PracticePage() {
       const response = await fetch(API_ENDPOINTS.evaluateSign, {
         method: 'POST',
         body: formData,
+        credentials: 'include',
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorData = await response.json().catch(() => null);
+        throw new Error(errorData?.detail || `HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
@@ -50,7 +52,7 @@ export default function PracticePage() {
       setIsCorrect(data.is_correct);
     } catch (error) {
       console.error('Error evaluating sign:', error);
-      setFeedback('Error evaluating sign. Please try again.');
+      setFeedback(error instanceof Error ? error.message : 'Error evaluating sign. Please try again.');
       setIsCorrect(false);
     }
   };
