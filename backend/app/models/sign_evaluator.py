@@ -125,36 +125,37 @@ class SignEvaluator:
         """
         try:
             print("Starting image preprocessing...")
+            print(f"Input image size: {image.size}, mode: {image.mode}")
             
-            # Convert to RGB if necessary
-            if image.mode != "RGB":
-                print(f"Converting image from {image.mode} to RGB")
-                image = image.convert("RGB")
+            # Ensure image is grayscale
+            if image.mode != 'L':
+                print(f"Converting image from {image.mode} to grayscale")
+                image = image.convert('L')
             
-            # Resize image
+            # Resize image to match training data
             print("Resizing image...")
             image = image.resize((64, 64))
+            print(f"Resized image size: {image.size}")
             
-            # Convert to tensor
-            print("Converting image to tensor...")
+            # Convert to tensor and normalize
+            print("Converting to tensor and normalizing...")
             transform = transforms.Compose([
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                transforms.Normalize((0.5,), (0.5,))
             ])
             image_tensor = transform(image)
-            
-            # Move to device
-            print("Moving tensor to device...")
-            image_tensor = image_tensor.to(self.device)
+            print(f"Tensor shape: {image_tensor.shape}")
             
             # Add batch dimension
-            print("Adding batch dimension...")
             image_tensor = image_tensor.unsqueeze(0)
+            print(f"Final tensor shape: {image_tensor.shape}")
             
-            print("Image preprocessing completed successfully")
             return image_tensor
         except Exception as e:
             print(f"Error in preprocess_image: {str(e)}")
+            print(f"Error type: {type(e)}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             raise
 
     def evaluate_sign(self, image, expected_sign=None):

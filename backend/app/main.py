@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -141,53 +141,54 @@ async def process_frame(file: UploadFile = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to process frame: {str(e)}")
 
-@app.post("/evaluate-sign", response_model=SignEvaluationResponse, responses={500: {"model": ErrorResponse}})
+@app.post("/evaluate-sign")
 async def evaluate_sign(
     file: UploadFile = File(...),
-    expected_sign: Optional[str] = None
+    expected_sign: str = Form(None)
 ):
-    """
-    Evaluate an ASL sign from an uploaded image.
-    
-    Args:
-        file: The image file containing the ASL sign
-        expected_sign: The expected sign (optional, for providing feedback)
-        
-    Returns:
-        SignEvaluationResponse: Evaluation results including predicted sign and confidence
-    """
     try:
-        # Read and validate the image
+        print(f"Received file: {file.filename}")
+        print(f"Expected sign: {expected_sign}")
+        
+        # Read the image data
         contents = await file.read()
+        print(f"Read {len(contents)} bytes from file")
+        
+        # Convert to PIL Image
         image = Image.open(io.BytesIO(contents))
+        print(f"Image size: {image.size}, mode: {image.mode}")
         
-        # Convert to RGB if necessary
-        if image.mode != "RGB":
-            image = image.convert("RGB")
+        # Convert to grayscale if needed
+        if image.mode != 'L':
+            print("Converting image to grayscale")
+            image = image.convert('L')
         
-        # Get prediction from the model
+        # Evaluate the sign
         result = sign_evaluator.evaluate_sign(image, expected_sign)
+        print(f"Evaluation result: {result}")
         
-        if not result['success']:
-            raise HTTPException(status_code=500, detail=result['feedback'])
-        
-        # Create response with CORS headers
-        response = JSONResponse(
-            content={
-                "predicted_sign": result['predicted_sign'],
-                "confidence": result['confidence'],
-                "feedback": result['feedback'],
-                "is_correct": result['is_correct']
+        return JSONResponse(
+            content=result,
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
             }
         )
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        return response
-    
     except Exception as e:
-        print(f"Error in evaluate_sign: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"Error in evaluate_sign endpoint: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": str(e)},
+            headers={
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Methods": "POST, OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
+            }
+        )
 
 @app.options("/evaluate-sign")
 async def evaluate_sign_options():
