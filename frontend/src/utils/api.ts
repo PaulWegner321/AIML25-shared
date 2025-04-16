@@ -1,4 +1,5 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// Hardcode the API URL for now
+const API_URL = 'https://asl-translate-backend.onrender.com';
 
 export const API_ENDPOINTS = {
   evaluateSign: `${API_URL}/evaluate-sign`,

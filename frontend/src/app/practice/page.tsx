@@ -12,6 +12,7 @@ export default function PracticePage() {
   const handleSignEvaluation = async (imageData: string) => {
     try {
       console.log('Starting sign evaluation...');
+      console.log('API URL:', API_ENDPOINTS.evaluateSign);
       
       // Convert base64 image to blob
       const base64Data = imageData.split(',')[1];
@@ -38,9 +39,6 @@ export default function PracticePage() {
       formData.append('file', blob, 'sign.jpg');
       formData.append('expected_sign', 'A'); // TODO: Get from flashcard
       console.log('FormData created with image and expected sign');
-      
-      // Log the API endpoint
-      console.log('Sending request to:', API_ENDPOINTS.evaluateSign);
       
       // Send the request
       const response = await fetch(API_ENDPOINTS.evaluateSign, {
