@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
 import os
+import sys
 
 class ASLCNN(nn.Module):
     def __init__(self):
@@ -32,11 +33,32 @@ class ASLDetector:
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = ASLCNN().to(self.device)
         
-        # If model_path is not provided, try to find it in the models directory
+        # If model_path is not provided, try to find it in various locations
         if model_path is None:
             # Get the directory of the current file
             current_dir = os.path.dirname(os.path.abspath(__file__))
-            model_path = os.path.join(current_dir, 'asl_cnn_weights.pth')
+            
+            # List of possible locations for the model weights file
+            possible_paths = [
+                os.path.join(current_dir, 'asl_cnn_weights.pth'),
+                os.path.join(os.path.dirname(current_dir), 'asl_cnn_weights.pth'),
+                os.path.join(os.path.dirname(os.path.dirname(current_dir)), 'app', 'asl_cnn_weights.pth'),
+                os.path.join(os.path.dirname(os.path.dirname(current_dir)), 'app', 'models', 'asl_cnn_weights.pth'),
+                '/opt/render/project/src/backend/app/models/asl_cnn_weights.pth',
+                '/opt/render/project/src/backend/app/asl_cnn_weights.pth'
+            ]
+            
+            # Try each path
+            for path in possible_paths:
+                if os.path.exists(path):
+                    model_path = path
+                    print(f"Found model weights at: {path}")
+                    break
+            
+            # If no path was found, use the default
+            if model_path is None:
+                model_path = os.path.join(current_dir, 'asl_cnn_weights.pth')
+                print(f"No model weights found in any location, using default: {model_path}")
         
         # Load model weights
         try:
@@ -45,6 +67,9 @@ class ASLDetector:
             self.model.eval()
         except Exception as e:
             print(f"Error loading model weights: {e}")
+            print(f"Current working directory: {os.getcwd()}")
+            print(f"Directory contents: {os.listdir('.')}")
+            print(f"Models directory contents: {os.listdir(current_dir) if os.path.exists(current_dir) else 'Directory not found'}")
             raise
         
         # Define image transforms

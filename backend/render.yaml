@@ -10,8 +10,19 @@ services:
       echo "Copying model files..."
       cp -r app/models/* /opt/render/project/src/backend/app/models/ || echo "No model files to copy"
       echo "Copying weights file..."
-      cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/models/ || echo "Failed to copy weights to models directory"
-      cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/ || echo "Failed to copy weights to app directory"
+      # Try multiple possible locations for the weights file
+      if [ -f "app/asl_cnn_weights.pth" ]; then
+        echo "Found weights file at app/asl_cnn_weights.pth"
+        cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/models/
+        cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/
+      elif [ -f "app/asl_cnn_weights_2.pth" ]; then
+        echo "Found weights file at app/asl_cnn_weights_2.pth"
+        cp app/asl_cnn_weights_2.pth /opt/render/project/src/backend/app/models/asl_cnn_weights.pth
+        cp app/asl_cnn_weights_2.pth /opt/render/project/src/backend/app/asl_cnn_weights.pth
+      else
+        echo "ERROR: No weights file found in app directory"
+        ls -la app/
+      fi
       echo "Listing model directory contents:"
       ls -la /opt/render/project/src/backend/app/models/
       echo "Listing app directory contents:"
