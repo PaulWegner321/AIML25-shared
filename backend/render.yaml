@@ -3,16 +3,34 @@ services:
     name: asl-translate-backend
     env: python
     buildCommand: |
+      echo "Starting build process..."
       pip install -r requirements.txt
+      echo "Creating directories..."
       mkdir -p /opt/render/project/src/backend/app/models
-      cp -r app/models/* /opt/render/project/src/backend/app/models/
-      cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/models/
+      echo "Copying model files..."
+      cp -r app/models/* /opt/render/project/src/backend/app/models/ || echo "No model files to copy"
+      echo "Copying weights file..."
+      cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/models/ || echo "Failed to copy weights to models directory"
+      cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/ || echo "Failed to copy weights to app directory"
+      echo "Listing model directory contents:"
+      ls -la /opt/render/project/src/backend/app/models/
+      echo "Listing app directory contents:"
+      ls -la /opt/render/project/src/backend/app/
     startCommand: |
+      echo "Running model check..."
       python app/check_model.py
+      echo "Running import fixes..."
       python app/fix_imports.py
-      uvicorn app.main:app --host 0.0.0.0 --port $PORT
+      echo "Starting application..."
+      uvicorn app.main:app --host 0.0.0.0 --port $PORT --log-level debug
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.0
       - key: PORT
-        value: 10000 
+        value: 10000
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: debug
+    healthCheckPath: /health
+    autoDeploy: true 

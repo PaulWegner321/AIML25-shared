@@ -15,8 +15,10 @@ def check_model():
         alt_locations = [
             "/opt/render/project/src/models",
             "/opt/render/project/src/backend/models",
+            "/opt/render/project/src/backend/app/models",
             os.path.join(os.getcwd(), "models"),
-            os.path.join(os.getcwd(), "backend", "models")
+            os.path.join(os.getcwd(), "backend", "models"),
+            os.path.join(os.getcwd(), "backend", "app", "models")
         ]
         
         for location in alt_locations:
@@ -38,8 +40,11 @@ def check_model():
         alt_locations = [
             "/opt/render/project/src/models/asl_cnn_weights.pth",
             "/opt/render/project/src/backend/models/asl_cnn_weights.pth",
+            "/opt/render/project/src/backend/app/models/asl_cnn_weights.pth",
             os.path.join(os.getcwd(), "models", "asl_cnn_weights.pth"),
-            os.path.join(os.getcwd(), "backend", "models", "asl_cnn_weights.pth")
+            os.path.join(os.getcwd(), "backend", "models", "asl_cnn_weights.pth"),
+            os.path.join(os.getcwd(), "backend", "app", "models", "asl_cnn_weights.pth"),
+            os.path.join(os.getcwd(), "backend", "app", "asl_cnn_weights.pth")
         ]
         
         for location in alt_locations:

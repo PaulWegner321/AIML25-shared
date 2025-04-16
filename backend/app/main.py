@@ -8,6 +8,7 @@ import numpy as np
 from PIL import Image
 import io
 import sys
+import datetime
 
 # Load environment variables
 load_dotenv()
@@ -218,8 +219,21 @@ async def get_sign_description(word: str):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy"}
+    """Health check endpoint for Render."""
+    try:
+        # Check if model files are accessible
+        model_check = check_model()
+        return {
+            "status": "healthy" if model_check else "degraded",
+            "model_files": "accessible" if model_check else "not accessible",
+            "timestamp": datetime.datetime.now().isoformat()
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.datetime.now().isoformat()
+        }
 
 if __name__ == "__main__":
     import uvicorn
