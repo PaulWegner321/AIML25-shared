@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from PIL import Image
 import torchvision.transforms as transforms
+import os
 
 class ASLCNN(nn.Module):
     def __init__(self):
@@ -27,12 +28,19 @@ class ASLCNN(nn.Module):
         return x
 
 class ASLDetector:
-    def __init__(self, model_path='asl_cnn_weights.pth'):
+    def __init__(self, model_path=None):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model = ASLCNN().to(self.device)
         
+        # If model_path is not provided, try to find it in the models directory
+        if model_path is None:
+            # Get the directory of the current file
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            model_path = os.path.join(current_dir, 'asl_cnn_weights.pth')
+        
         # Load model weights
         try:
+            print(f"Loading model weights from: {model_path}")
             self.model.load_state_dict(torch.load(model_path, map_location=self.device))
             self.model.eval()
         except Exception as e:

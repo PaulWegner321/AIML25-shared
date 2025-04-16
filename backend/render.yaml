@@ -6,6 +6,7 @@ services:
       pip install -r requirements.txt
       mkdir -p /opt/render/project/src/backend/app/models
       cp -r app/models/* /opt/render/project/src/backend/app/models/
+      cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/models/
     startCommand: |
       python app/check_model.py
       python app/fix_imports.py
