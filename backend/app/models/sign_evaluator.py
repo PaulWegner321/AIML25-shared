@@ -26,6 +26,15 @@ class ASLNet(nn.Module):
         # Print input shape for debugging
         print(f"Input shape: {x.shape}")
         
+        # Check if input has the correct number of channels
+        if x.shape[1] != 1:
+            print(f"Warning: Expected 1 channel, got {x.shape[1]} channels. Converting to grayscale.")
+            # If we have 3 channels, take the first one (assuming it's grayscale)
+            if x.shape[1] == 3:
+                x = x[:, 0:1, :, :]
+            else:
+                raise ValueError(f"Unexpected number of channels: {x.shape[1]}")
+        
         # Apply convolutions and pooling
         x = self.pool(F.relu(self.conv1(x)))
         print(f"After conv1: {x.shape}")
@@ -146,6 +155,10 @@ class SignEvaluator:
             image_tensor = transform(image)
             print(f"Tensor shape: {image_tensor.shape}")
             
+            # Move to device
+            print("Moving tensor to device...")
+            image_tensor = image_tensor.to(self.device)
+            
             # Add batch dimension
             image_tensor = image_tensor.unsqueeze(0)
             print(f"Final tensor shape: {image_tensor.shape}")
@@ -171,6 +184,11 @@ class SignEvaluator:
         """
         try:
             print("Starting sign evaluation...")
+            
+            # Ensure image is grayscale
+            if image.mode != 'L':
+                print(f"Converting image from {image.mode} to grayscale")
+                image = image.convert('L')
             
             # Preprocess the image
             print("Preprocessing image...")
@@ -209,6 +227,9 @@ class SignEvaluator:
             }
         except Exception as e:
             print(f"Error in evaluate_sign: {str(e)}")
+            print(f"Error type: {type(e)}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return {
                 'success': False,
                 'predicted_sign': None,
