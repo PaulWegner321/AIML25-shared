@@ -1,66 +1,55 @@
-# ASL Translation Platform
+# ASL Learning Platform
 
-A full-stack application for American Sign Language (ASL) detection, translation, and evaluation. The platform uses computer vision to detect ASL signs from video input and provides real-time translation and feedback.
+An interactive web platform for learning American Sign Language (ASL) through practice and lookup features.
+
+## Features
+
+- **Flashcard Practice**: Practice ASL signs with real-time feedback
+- **Sign Lookup**: Search for detailed descriptions of ASL signs
+- **Interactive Camera**: Real-time sign evaluation using your webcam
+- **Detailed Instructions**: Step-by-step guides for performing signs
+- **Tips & Feedback**: Get helpful tips and immediate feedback on your signing
+
+## Tech Stack
+
+### Frontend
+- Next.js 14 (App Router)
+- TypeScript
+- TailwindCSS
+- React Webcam
+
+### Backend
+- FastAPI
+- Python 3.11+
+- Pydantic
+- OpenCV (for future sign detection)
 
 ## Project Structure
 
 ```
 .
-├── backend/                 # FastAPI backend
-│   ├── app/                # Application code
-│   │   ├── main.py        # FastAPI application and endpoints
-│   │   └── models/        # ML models (to be implemented)
-│   ├── tests/             # Backend tests
-│   ├── requirements.txt   # Python dependencies
-│   └── .env.production    # Production environment variables
+├── frontend/                 # Next.js frontend application
+│   ├── src/
+│   │   ├── app/             # Next.js app router pages
+│   │   ├── components/      # React components
+│   │   └── styles/          # Global styles
+│   └── public/              # Static assets
 │
-└── nextjs-app/            # Next.js frontend
-    ├── src/
-    │   ├── app/          # Next.js pages
-    │   │   └── video/    # Video translation page
-    │   ├── components/   # Reusable UI components
-    │   └── config/       # Configuration files
-    ├── public/           # Static assets
-    └── package.json      # Node.js dependencies
+└── backend/                 # FastAPI backend application
+    ├── app/
+    │   ├── models/          # ML models and business logic
+    │   ├── schemas/         # Pydantic schemas
+    │   └── config/          # Configuration files
+    └── requirements.txt     # Python dependencies
 ```
 
-## Features
-
-- Real-time video capture and processing
-- ASL sign detection (to be implemented)
-- Translation of ASL to text
-- Performance evaluation and feedback
-- Modern, responsive UI
-- Secure API communication
-
-## Tech Stack
-
-### Frontend
-- Next.js 14
-- React
-- TypeScript
-- Tailwind CSS
-- Shadcn UI Components
-
-### Backend
-- FastAPI
-- Python 3.9+
-- IBM Watson Machine Learning
-- LangChain
-- FAISS
-- ChromaDB
-
-## Getting Started
-
-### Prerequisites
-- Node.js 18+
-- Python 3.9+
-- Git
+## Local Development
 
 ### Frontend Setup
+
 1. Navigate to the frontend directory:
    ```bash
-   cd nextjs-app
+   cd frontend
    ```
 
 2. Install dependencies:
@@ -68,17 +57,15 @@ A full-stack application for American Sign Language (ASL) detection, translation
    npm install
    ```
 
-3. Create a `.env.local` file:
-   ```
-   NEXT_PUBLIC_API_URL=http://localhost:8000
-   ```
-
-4. Start the development server:
+3. Start the development server:
    ```bash
    npm run dev
    ```
 
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
 ### Backend Setup
+
 1. Navigate to the backend directory:
    ```bash
    cd backend
@@ -95,50 +82,51 @@ A full-stack application for American Sign Language (ASL) detection, translation
    pip install -r requirements.txt
    ```
 
-4. Create a `.env` file:
-   ```
-   ENVIRONMENT=development
-   FRONTEND_URL=http://localhost:3000
-   PORT=8000
-   ```
-
-5. Start the development server:
+4. Start the development server:
    ```bash
    uvicorn app.main:app --reload
    ```
 
+5. The API will be available at [http://localhost:8000](http://localhost:8000).
+
 ## Deployment
 
 ### Frontend (Vercel)
-1. Push changes to GitHub
-2. Connect repository to Vercel
-3. Configure environment variables
-4. Deploy
+
+1. Push your code to GitHub
+2. Connect your repository to Vercel
+3. Configure environment variables:
+   - `NEXT_PUBLIC_API_URL`: Backend API URL
 
 ### Backend (Render)
-1. Push changes to GitHub
-2. Create new Web Service on Render
-3. Configure:
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
-4. Add environment variables:
-   ```
-   ENVIRONMENT=production
-   FRONTEND_URL=<your-frontend-url>
-   PORT=10000
-   ```
+
+1. Push your code to GitHub
+2. Create a new Web Service on Render
+3. Connect your repository
+4. Configure environment variables:
+   - `ENVIRONMENT`: Production
+   - Add any API keys or secrets
 
 ## API Endpoints
 
-### Translation
-- **POST** `/translate`
-  - Request: `{ "tokens": ["sign1", "sign2", ...] }`
-  - Response: `{ "translation": "translated text" }`
+### Sign Evaluation
+- `POST /evaluate-sign`
+  - Input: Image file + expected sign
+  - Output: Evaluation results with feedback
 
-### Evaluation
-- **POST** `/judge`
-  - Request: `{ "translation": "text", "tokens": ["sign1", "sign2", ...] }`
-  - Response: `{ "feedback": "feedback text", "score": 0.75 }`
+### Sign Description
+- `POST /sign-description`
+  - Input: Word to look up
+  - Output: Detailed sign description with steps and tips
+
+## Future Enhancements
+
+- Real-time sign detection using OpenCV
+- Integration with IBM WatsonX for improved RAG
+- User accounts and progress tracking
+- Practice session history
+- Mobile app version
+- Additional ASL learning resources
 
 ## Contributing
 
@@ -150,11 +138,4 @@ A full-stack application for American Sign Language (ASL) detection, translation
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Acknowledgments
-
-- IBM Watson for ML capabilities
-- LangChain for RAG pipeline
-- FAISS and ChromaDB for vector storage
-- The ASL community for sign language resources 
+This project is licensed under the MIT License - see the LICENSE file for details. 
