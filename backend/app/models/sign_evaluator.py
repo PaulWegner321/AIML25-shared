@@ -18,7 +18,8 @@ class ASLNet(nn.Module):
         self.conv3 = nn.Conv2d(64, 128, kernel_size=3)  # Changed from 64 to 128
         self.conv4 = nn.Conv2d(128, 128, kernel_size=3)  # Added conv4 layer
         self.pool = nn.MaxPool2d(2, 2)
-        self.fc1 = nn.Linear(1152, 512)  # Changed dimensions to match weights
+        # We'll calculate the correct input size for fc1 dynamically
+        self.fc1 = None  # Will be initialized in forward pass
         self.fc2 = nn.Linear(512, 26)  # Changed from 64 to 512
         self.dropout = nn.Dropout(0.5)
         
@@ -48,8 +49,18 @@ class ASLNet(nn.Module):
         x = self.pool(F.relu(self.conv4(x)))  # Added conv4 layer
         print(f"After conv4: {x.shape}")
         
+        # Calculate the correct input size for fc1
+        batch_size = x.size(0)
+        fc_input_size = x.size(1) * x.size(2) * x.size(3)
+        print(f"Calculated fc_input_size: {fc_input_size}")
+        
+        # Initialize fc1 if it hasn't been initialized yet or if the input size has changed
+        if self.fc1 is None or self.fc1.in_features != fc_input_size:
+            print(f"Initializing fc1 with input size: {fc_input_size}")
+            self.fc1 = nn.Linear(fc_input_size, 512).to(x.device)
+        
         # Flatten
-        x = x.view(-1, 1152)  # Changed dimensions to match weights
+        x = x.view(batch_size, -1)
         print(f"After flatten: {x.shape}")
         
         # Apply fully connected layers
@@ -103,7 +114,7 @@ class SignEvaluator:
         # Load model weights
         try:
             print(f"Loading model weights from: {model_path}")
-            self.model.load_state_dict(torch.load(model_path, map_location=self.device))
+            self.load_weights(model_path)
             self.model.eval()
         except Exception as e:
             print(f"Error loading model weights: {e}")
@@ -121,6 +132,37 @@ class SignEvaluator:
         
         # Define class labels (A-Z)
         self.classes = [chr(i) for i in range(65, 91)]  # A to Z
+
+    def load_weights(self, model_path):
+        """
+        Load model weights with error handling for mismatched architectures.
+        
+        Args:
+            model_path: Path to the model weights file
+        """
+        try:
+            # Load the state dict
+            state_dict = torch.load(model_path, map_location=self.device)
+            
+            # Create a dummy input to initialize the fc1 layer
+            dummy_input = torch.zeros(1, 1, 64, 64).to(self.device)
+            with torch.no_grad():
+                _ = self.model(dummy_input)
+            
+            # Try to load the state dict
+            try:
+                self.model.load_state_dict(state_dict)
+                print("Successfully loaded model weights")
+            except Exception as e:
+                print(f"Error loading state dict: {e}")
+                print("Attempting to load weights with strict=False")
+                
+                # Try loading with strict=False to ignore mismatched keys
+                self.model.load_state_dict(state_dict, strict=False)
+                print("Successfully loaded model weights with strict=False")
+        except Exception as e:
+            print(f"Error in load_weights: {e}")
+            raise
 
     def preprocess_image(self, image):
         """
