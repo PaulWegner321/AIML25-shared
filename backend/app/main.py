@@ -157,20 +157,6 @@ async def evaluate_sign(
         SignEvaluationResponse: Evaluation results including predicted sign and confidence
     """
     try:
-        # Add CORS headers for this specific endpoint
-        response = JSONResponse(
-            content={
-                "predicted_sign": "A",
-                "confidence": 0.95,
-                "feedback": "Good job! Your sign is correct.",
-                "is_correct": True
-            }
-        )
-        response.headers["Access-Control-Allow-Origin"] = "*"
-        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "*"
-        return response
-        
         # Read and validate the image
         contents = await file.read()
         image = Image.open(io.BytesIO(contents))
@@ -185,14 +171,22 @@ async def evaluate_sign(
         if not result['success']:
             raise HTTPException(status_code=500, detail=result['feedback'])
         
-        return SignEvaluationResponse(
-            predicted_sign=result['predicted_sign'],
-            confidence=result['confidence'],
-            feedback=result['feedback'],
-            is_correct=result['is_correct']
+        # Create response with CORS headers
+        response = JSONResponse(
+            content={
+                "predicted_sign": result['predicted_sign'],
+                "confidence": result['confidence'],
+                "feedback": result['feedback'],
+                "is_correct": result['is_correct']
+            }
         )
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        return response
     
     except Exception as e:
+        print(f"Error in evaluate_sign: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.options("/evaluate-sign")
