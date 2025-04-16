@@ -11,6 +11,8 @@ export default function PracticePage() {
 
   const handleSignEvaluation = async (imageData: string) => {
     try {
+      console.log('Starting sign evaluation...');
+      
       // Convert base64 image to blob
       const base64Data = imageData.split(',')[1];
       const byteCharacters = atob(base64Data);
@@ -29,25 +31,33 @@ export default function PracticePage() {
       }
       
       const blob = new Blob(byteArrays, { type: 'image/jpeg' });
+      console.log('Image converted to blob');
       
       // Create FormData and append the image
       const formData = new FormData();
       formData.append('file', blob, 'sign.jpg');
       formData.append('expected_sign', 'A'); // TODO: Get from flashcard
+      console.log('FormData created with image and expected sign');
+      
+      // Log the API endpoint
+      console.log('Sending request to:', API_ENDPOINTS.evaluateSign);
       
       // Send the request
       const response = await fetch(API_ENDPOINTS.evaluateSign, {
         method: 'POST',
         body: formData,
-        credentials: 'include',
       });
+      
+      console.log('Response received:', response.status);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
+        console.error('Error response:', errorData);
         throw new Error(errorData?.detail || `HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
+      console.log('Evaluation result:', data);
       setFeedback(data.feedback);
       setIsCorrect(data.is_correct);
     } catch (error) {
