@@ -31,7 +31,9 @@ app.add_middleware(
         FRONTEND_URL,
         "http://localhost:3000",
         "https://asltranslate-p4sndxrkd-henriks-projects-f6f15939.vercel.app",
-        "https://asltranslate-c8qu1q97f-henriks-projects-f6f15939.vercel.app"
+        "https://asltranslate-c8qu1q97f-henriks-projects-f6f15939.vercel.app",
+        "https://asl-edu-platform.vercel.app"
+
     ] if ENVIRONMENT == "production" else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
