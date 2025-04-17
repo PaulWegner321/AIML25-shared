@@ -13,47 +13,47 @@ const HandDetector: React.FC<HandDetectorProps> = ({ onSignDetected }) => {
   const [lastDetectedSign, setLastDetectedSign] = useState<string>('');
   const [confidence, setConfidence] = useState<number>(0);
 
-  const captureFrame = async () => {
-    if (webcamRef.current) {
-      const imageSrc = webcamRef.current.getScreenshot();
-      if (imageSrc) {
-        try {
-          // Convert base64 to blob
-          const base64Response = await fetch(imageSrc);
-          const blob = await base64Response.blob();
-
-          // Create form data
-          const formData = new FormData();
-          formData.append('file', blob, 'webcam.jpg');
-
-          // Send to backend - use local URL during development
-          const response = await fetch('http://localhost:8000/evaluate-sign', {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const result = await response.json();
-          console.log('Detection result:', result);  // Add logging
-          
-          if (result.success) {
-            setLastDetectedSign(result.letter);
-            setConfidence(result.confidence);
-            if (onSignDetected) {
-              onSignDetected(result.letter, result.confidence);
+  useEffect(() => {
+    const captureFrame = async () => {
+      if (webcamRef.current) {
+        const imageSrc = webcamRef.current.getScreenshot();
+        if (imageSrc) {
+          try {
+            // Convert base64 to blob
+            const base64Response = await fetch(imageSrc);
+            const blob = await base64Response.blob();
+  
+            // Create form data
+            const formData = new FormData();
+            formData.append('file', blob, 'webcam.jpg');
+  
+            // Send to backend - use local URL during development
+            const response = await fetch('http://localhost:8000/evaluate-sign', {
+              method: 'POST',
+              body: formData,
+            });
+  
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
             }
+  
+            const result = await response.json();
+            console.log('Detection result:', result);  // Add logging
+            
+            if (result.success) {
+              setLastDetectedSign(result.letter);
+              setConfidence(result.confidence);
+              if (onSignDetected) {
+                onSignDetected(result.letter, result.confidence);
+              }
+            }
+          } catch (error) {
+            console.error('Error detecting sign:', error);
           }
-        } catch (error) {
-          console.error('Error detecting sign:', error);
         }
       }
-    }
-  };
+    };
 
-  useEffect(() => {
     let intervalId: NodeJS.Timeout;
 
     if (isDetecting) {
@@ -66,7 +66,7 @@ const HandDetector: React.FC<HandDetectorProps> = ({ onSignDetected }) => {
         clearInterval(intervalId);
       }
     };
-  }, [isDetecting]);
+  }, [isDetecting, onSignDetected]);
 
   return (
     <div className="flex flex-col items-center gap-4">

@@ -8,6 +8,7 @@ import { API_ENDPOINTS } from '@/utils/api';
 export default function PracticePage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [currentSign, setCurrentSign] = useState('A'); // Add state for current sign
 
   const handleSignEvaluation = async (imageData: string) => {
