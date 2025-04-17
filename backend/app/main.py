@@ -21,7 +21,7 @@ app = FastAPI(
 )
 
 # Get environment variables
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://asltranslate-p4sndxrkd-henriks-projects-f6f15939.vercel.app")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://asl-edu-platform.vercel.app")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 # Add CORS middleware
