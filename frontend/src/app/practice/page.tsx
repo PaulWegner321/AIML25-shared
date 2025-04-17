@@ -8,6 +8,7 @@ import { API_ENDPOINTS } from '@/utils/api';
 export default function PracticePage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const [currentSign, setCurrentSign] = useState('A'); // Add state for current sign
 
   const handleSignEvaluation = async (imageData: string) => {
     try {
@@ -37,7 +38,7 @@ export default function PracticePage() {
       // Create FormData and append the image
       const formData = new FormData();
       formData.append('file', blob, 'sign.jpg');
-      formData.append('expected_sign', 'A'); // TODO: Get from flashcard
+      formData.append('expected_sign', currentSign);
       console.log('FormData created with image and expected sign');
       
       // Send the request
@@ -56,8 +57,19 @@ export default function PracticePage() {
 
       const data = await response.json();
       console.log('Evaluation result:', data);
-      setFeedback(data.feedback);
-      setIsCorrect(data.is_correct);
+
+      if (data.success) {
+        const isCorrect = data.letter === currentSign;
+        setIsCorrect(isCorrect);
+        if (isCorrect) {
+          setFeedback(`Correct! You signed '${data.letter}' with ${(data.confidence * 100).toFixed(1)}% confidence.`);
+        } else {
+          setFeedback(`Your sign was detected as '${data.letter}' with ${(data.confidence * 100).toFixed(1)}% confidence. Try signing '${currentSign}' again.`);
+        }
+      } else {
+        setFeedback(data.error || 'No hand detected. Please try again.');
+        setIsCorrect(false);
+      }
     } catch (error) {
       console.error('Error evaluating sign:', error);
       setFeedback(error instanceof Error ? error.message : 'Error evaluating sign. Please try again.');
@@ -66,13 +78,13 @@ export default function PracticePage() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto p-4">
       <h1 className="text-3xl font-bold mb-8">Practice ASL Signs</h1>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
           <FlashcardPrompt
-            currentSign="A"
+            currentSign={currentSign}
             onSignCaptured={handleSignEvaluation}
           />
         </div>

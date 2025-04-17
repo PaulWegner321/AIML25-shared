@@ -1,35 +1,39 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 import os
 from dotenv import load_dotenv
 import numpy as np
-from PIL import Image
-import io
-import sys
-import datetime
-from fastapi.responses import JSONResponse
+import cv2
+
+# Import the HandDetector
+from .models.keypoint_detector import HandDetector
 
 # Load environment variables
 load_dotenv()
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="ASL Learning Platform API",
-    description="API for ASL learning platform with sign evaluation and description capabilities.",
+    title="ASL Translation API",
+    description="API for ASL detection, translation, and evaluation",
     version="1.0.0"
 )
 
 # Get environment variables
-FRONTEND_URL = os.getenv("FRONTEND_URL", "https://asl-edu-platform.vercel.app")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "https://asltranslate-p4sndxrkd-henriks-projects-f6f15939.vercel.app")
 ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
 
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for now
-    allow_credentials=False,  # Set to False when using allow_origins=["*"]
+    allow_origins=[
+        FRONTEND_URL,
+        "http://localhost:3000",
+        "https://asltranslate-p4sndxrkd-henriks-projects-f6f15939.vercel.app",
+        "https://asltranslate-c8qu1q97f-henriks-projects-f6f15939.vercel.app"
+    ] if ENVIRONMENT == "production" else ["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -42,6 +46,12 @@ class JudgmentRequest(BaseModel):
     translation: str
     tokens: List[str]
 
+class SignEvaluationResponse(BaseModel):
+    success: bool
+    letter: Optional[str] = None
+    confidence: Optional[float] = None
+    error: Optional[str] = None
+
 # Define response models
 class TranslationResponse(BaseModel):
     translation: str
@@ -50,56 +60,67 @@ class JudgmentResponse(BaseModel):
     feedback: str
     score: float
 
-class VideoFrameResponse(BaseModel):
-    letter: str
-    confidence: float
-
-class SignEvaluationResponse(BaseModel):
-    predicted_sign: str
-    confidence: float
-    feedback: str
-    is_correct: bool
-
-class SignDescriptionResponse(BaseModel):
-    word: str
-    description: str
-    steps: List[str]
-    tips: List[str]
-
-class ErrorResponse(BaseModel):
-    error: str
-
-# Get the absolute path to the backend directory
-BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Add the backend directory to the Python path
-sys.path.insert(0, BACKEND_DIR)
-
-# Now import the ASL detector
-from app.models.asl_detector import ASLDetector
-
-# Import our models
-from app.models.sign_evaluator import SignEvaluator
-from app.models.rag_description import RAGDescription
-
 # Initialize model instances
-asl_detector = ASLDetector()
-sign_evaluator = SignEvaluator()
-rag_description = RAGDescription()
+hand_detector = HandDetector()
 
 @app.get("/")
 async def root():
-    """Root endpoint that returns API information."""
     return {
-        "name": "ASL Learning Platform API",
-        "version": "1.0.0",
-        "description": "API for ASL learning platform with sign evaluation and description capabilities."
+        "message": "ASL Translation API",
+        "status": "healthy",
+        "environment": ENVIRONMENT
     }
+
+@app.post("/evaluate-sign", response_model=SignEvaluationResponse)
+async def evaluate_sign(file: UploadFile = File(...), expected_sign: str = None):
+    try:
+        # Read and decode image
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if image is None:
+            raise HTTPException(status_code=400, detail="Invalid image file")
+        
+        # Detect sign
+        result = hand_detector.detect_sign(image)
+        
+        if not result['success']:
+            return SignEvaluationResponse(
+                success=False,
+                error=result.get('error', 'Failed to detect hand in image')
+            )
+        
+        # If an expected sign was provided, check if the prediction matches
+        if expected_sign:
+            is_correct = result['letter'].lower() == expected_sign.lower()
+            if is_correct:
+                feedback = "Good job! Your sign is correct."
+            else:
+                feedback = f"Your sign was interpreted as '{result['letter']}', but the expected sign was '{expected_sign}'. Try again!"
+            
+            return SignEvaluationResponse(
+                success=True,
+                letter=result['letter'],
+                confidence=result['confidence'],
+                error=None if is_correct else feedback
+            )
+        
+        return SignEvaluationResponse(
+            success=True,
+            letter=result['letter'],
+            confidence=result['confidence']
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/translate", response_model=TranslationResponse)
 async def translate(request: TranslationRequest):
     try:
         # For now, return a dummy translation
         # In the future, use the translator model
+        # translation = translator.translate(request.tokens)
         translation = f"Dummy translation for tokens: {', '.join(request.tokens)}"
         return TranslationResponse(translation=translation)
     except Exception as e:
@@ -110,139 +131,12 @@ async def judge(request: JudgmentRequest):
     try:
         # For now, return dummy feedback
         # In the future, use the judge model
+        # feedback, score = judge.evaluate(request.translation, request.tokens)
         feedback = "This is a dummy feedback for the translation."
         score = 0.75
         return JudgmentResponse(feedback=feedback, score=score)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/process-frame", response_model=VideoFrameResponse)
-async def process_frame(file: UploadFile = File(...)):
-    try:
-        # Read the image file
-        contents = await file.read()
-        image = Image.open(io.BytesIO(contents))
-        
-        # Convert to numpy array for processing
-        image_array = np.array(image)
-        
-        # Get prediction from ASL detector
-        predictions = asl_detector.detect(image_array)
-        
-        if not predictions:
-            raise HTTPException(status_code=400, detail="No ASL letter detected in the frame")
-            
-        # Return the first prediction (we're only processing one frame at a time)
-        letter, confidence = predictions[0]
-        return VideoFrameResponse(
-            letter=letter,
-            confidence=confidence
-        )
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to process frame: {str(e)}")
-
-@app.post("/evaluate-sign")
-async def evaluate_sign(
-    file: UploadFile = File(...),
-    expected_sign: str = Form(None)
-):
-    try:
-        print(f"Received file: {file.filename}")
-        print(f"Expected sign: {expected_sign}")
-        
-        # Read the image data
-        contents = await file.read()
-        print(f"Read {len(contents)} bytes from file")
-        
-        # Convert to PIL Image
-        image = Image.open(io.BytesIO(contents))
-        print(f"Image size: {image.size}, mode: {image.mode}")
-        
-        # Convert to grayscale if needed
-        if image.mode != 'L':
-            print("Converting image to grayscale")
-            image = image.convert('L')
-        
-        # Evaluate the sign
-        result = sign_evaluator.evaluate_sign(image, expected_sign)
-        print(f"Evaluation result: {result}")
-        
-        return JSONResponse(
-            content=result,
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
-            }
-        )
-    except Exception as e:
-        print(f"Error in evaluate_sign endpoint: {str(e)}")
-        print(f"Error type: {type(e)}")
-        import traceback
-        print(f"Traceback: {traceback.format_exc()}")
-        return JSONResponse(
-            status_code=500,
-            content={"detail": str(e)},
-            headers={
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Methods": "POST, OPTIONS",
-                "Access-Control-Allow-Headers": "Content-Type"
-            }
-        )
-
-@app.options("/evaluate-sign")
-async def evaluate_sign_options():
-    """
-    Handle OPTIONS requests for the /evaluate-sign endpoint.
-    """
-    response = JSONResponse(content={})
-    response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
-    return response
-
-@app.get("/sign-description/{word}", response_model=SignDescriptionResponse, responses={500: {"model": ErrorResponse}})
-async def get_sign_description(word: str):
-    """
-    Get a description of how to sign a word in ASL.
-    
-    Args:
-        word: The word to get a description for
-        
-    Returns:
-        SignDescriptionResponse: Description results including steps and tips
-    """
-    try:
-        # Get description from the RAG model
-        description = rag_description.get_sign_description(word)
-        
-        return SignDescriptionResponse(
-            word=description["word"],
-            description=description["description"],
-            steps=description["steps"],
-            tips=description["tips"]
-        )
-    
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint for Render."""
-    try:
-        # Check if model files are accessible
-        model_check = check_model()
-        return {
-            "status": "healthy" if model_check else "degraded",
-            "model_files": "accessible" if model_check else "not accessible",
-            "timestamp": datetime.datetime.now().isoformat()
-        }
-    except Exception as e:
-        return {
-            "status": "unhealthy",
-            "error": str(e),
-            "timestamp": datetime.datetime.now().isoformat()
-        }
 
 if __name__ == "__main__":
     import uvicorn

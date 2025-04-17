@@ -6,212 +6,121 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.transforms as transforms
+import io
 
 # Add the parent directory to the Python path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-class ASLNet(nn.Module):
+class ColorASLCNN(nn.Module):
     def __init__(self):
-        super(ASLNet, self).__init__()
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=3)  # Changed from 3 to 1 for grayscale
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3)
-        self.conv3 = nn.Conv2d(64, 128, kernel_size=3)  # Changed from 64 to 128
-        self.conv4 = nn.Conv2d(128, 128, kernel_size=3)  # Added conv4 layer
-        self.pool = nn.MaxPool2d(2, 2)
-        # Fixed input size for fc1 to match the weights file
-        self.fc1 = nn.Linear(1152, 512)  # Changed from dynamic to fixed size
-        self.fc2 = nn.Linear(512, 26)  # Changed from 64 to 512
+        super(ColorASLCNN, self).__init__()
+        # Define the convolutional layers for RGB input (3 channels)
+        self.conv_layers = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),  # 64x64 -> 32x32
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),  # 32x32 -> 16x16
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2),  # 16x16 -> 8x8
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2)   # 8x8 -> 4x4
+        )
+        
+        # Flatten layer to convert 2D image data into 1D feature vector
+        self.flatten = nn.Flatten()
+        
+        # Fully connected layers
+        # After 4 max pooling layers: 64x64 -> 32x32 -> 16x16 -> 8x8 -> 4x4
+        # With 128 channels: 128 * 4 * 4 = 2048
+        self.fc1 = nn.Linear(2048, 512)
+        self.fc2 = nn.Linear(512, 29)  # Output layer for 29 classes (A-Z, space, delete, nothing)
         self.dropout = nn.Dropout(0.5)
-        
+
     def forward(self, x):
-        # Print input shape for debugging
-        print(f"Input shape: {x.shape}")
+        # Apply convolutional layers
+        x = self.conv_layers(x)
         
-        # Check if input has the correct number of channels
-        if x.shape[1] != 1:
-            print(f"Warning: Expected 1 channel, got {x.shape[1]} channels. Converting to grayscale.")
-            # If we have 3 channels, take the first one (assuming it's grayscale)
-            if x.shape[1] == 3:
-                x = x[:, 0:1, :, :]
-            else:
-                raise ValueError(f"Unexpected number of channels: {x.shape[1]}")
-        
-        # Apply convolutions and pooling
-        x = self.pool(F.relu(self.conv1(x)))
-        print(f"After conv1: {x.shape}")
-        
-        x = self.pool(F.relu(self.conv2(x)))
-        print(f"After conv2: {x.shape}")
-        
-        x = self.pool(F.relu(self.conv3(x)))
-        print(f"After conv3: {x.shape}")
-        
-        x = self.pool(F.relu(self.conv4(x)))  # Added conv4 layer
-        print(f"After conv4: {x.shape}")
-        
-        # Flatten with fixed size to match weights file
-        x = x.view(-1, 1152)  # Fixed size to match weights
-        print(f"After flatten: {x.shape}")
+        # Flatten the feature maps into a 1D vector
+        x = self.flatten(x)
         
         # Apply fully connected layers
         x = F.relu(self.fc1(x))
         x = self.dropout(x)
-        print(f"After fc1: {x.shape}")
-        
-        x = self.fc2(x)
-        print(f"After fc2: {x.shape}")
+        x = self.fc2(x)  # Output layer for classification
         
         return x
 
 class SignEvaluator:
-    def __init__(self, model_path=None):
-        """
-        Initialize the sign evaluator with the trained CNN model.
+    def __init__(self):
+        print("Initializing sign evaluator...")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = self._load_model()
+        self.transform = transforms.Compose([
+            transforms.Resize((64, 64)),  # Keep RGB images at 64x64
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  # Normalize RGB
+        ])
+        # Define class labels (A-Z, space, delete, nothing)
+        self.class_mapping = {}
+        for i in range(26):  # A-Z
+            self.class_mapping[i] = chr(i + 65)
+        self.class_mapping[26] = 'space'
+        self.class_mapping[27] = 'delete'
+        self.class_mapping[28] = 'nothing'
+
+    def _load_model(self):
+        # Look for the model weights in the new model folder
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        model_path = os.path.join(os.path.dirname(os.path.dirname(current_dir)), 'app', 'new model', 'asl_cnn_weights_2.pth')
         
-        Args:
-            model_path: Path to the model weights. If None, will look in the same directory.
-        """
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = ASLNet().to(self.device)
-        
-        # If model_path is not provided, try to find it in various locations
-        if model_path is None:
-            # Get the directory of the current file
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            
-            # List of possible locations for the model weights file
-            possible_paths = [
-                os.path.join(current_dir, 'asl_cnn_weights.pth'),
-                os.path.join(os.path.dirname(current_dir), 'asl_cnn_weights.pth'),
-                os.path.join(os.path.dirname(os.path.dirname(current_dir)), 'app', 'asl_cnn_weights.pth'),
-                os.path.join(os.path.dirname(os.path.dirname(current_dir)), 'app', 'models', 'asl_cnn_weights.pth'),
-                '/opt/render/project/src/backend/app/models/asl_cnn_weights.pth',
-                '/opt/render/project/src/backend/app/asl_cnn_weights.pth'
-            ]
-            
-            # Try each path
-            for path in possible_paths:
-                if os.path.exists(path):
-                    model_path = path
-                    print(f"Found model weights at: {path}")
-                    break
-            
-            # If no path was found, use the default
-            if model_path is None:
-                model_path = os.path.join(current_dir, 'asl_cnn_weights.pth')
-                print(f"No model weights found in any location, using default: {model_path}")
-        
-        # Load model weights
-        try:
-            print(f"Loading model weights from: {model_path}")
-            self.load_weights(model_path)
-            self.model.eval()
-        except Exception as e:
-            print(f"Error loading model weights: {e}")
+        if not os.path.exists(model_path):
+            print(f"Model weights not found at: {model_path}")
             print(f"Current working directory: {os.getcwd()}")
             print(f"Directory contents: {os.listdir('.')}")
-            print(f"Models directory contents: {os.listdir(current_dir) if os.path.exists(current_dir) else 'Directory not found'}")
-            
-            # Create a fallback model with random weights
-            print("Creating a fallback model with random weights")
-            self.model = ASLNet().to(self.device)
-            self.model.eval()
+            raise FileNotFoundError(f"Model weights not found at: {model_path}")
         
-        # Define image transforms
-        self.transform = transforms.Compose([
-            transforms.Resize((28, 28)),
-            transforms.ToTensor(),
-            transforms.Normalize((0.5,), (0.5,))
-        ])
-        
-        # Define class labels (A-Z)
-        self.classes = [chr(i) for i in range(65, 91)]  # A to Z
+        print(f"Loading model weights from: {model_path}")
+        model = ColorASLCNN().to(self.device)
+        model.load_state_dict(torch.load(model_path, map_location=self.device))
+        model.eval()
+        return model
 
-    def load_weights(self, model_path):
-        """
-        Load model weights with error handling for mismatched architectures.
-        
-        Args:
-            model_path: Path to the model weights file
-        """
+    def preprocess_image(self, image_input):
+        print("Starting image preprocessing...")
         try:
-            # Load the state dict
-            state_dict = torch.load(model_path, map_location=self.device)
+            # Handle both file paths and PIL Image objects
+            if isinstance(image_input, str):
+                image = Image.open(image_input)
+            elif isinstance(image_input, Image.Image):
+                image = image_input
+            else:
+                raise ValueError("Input must be either a file path or a PIL Image object")
             
-            # Try to load the state dict
-            try:
-                self.model.load_state_dict(state_dict)
-                print("Successfully loaded model weights")
-            except Exception as e:
-                print(f"Error loading state dict: {e}")
-                print("Attempting to load weights with strict=False")
-                
-                # Try loading with strict=False to ignore mismatched keys
-                try:
-                    self.model.load_state_dict(state_dict, strict=False)
-                    print("Successfully loaded model weights with strict=False")
-                except Exception as e:
-                    print(f"Error loading with strict=False: {e}")
-                    print("Attempting to create a new model with the correct architecture")
-                    
-                    # Create a new model with the correct architecture
-                    self.model = ASLNet().to(self.device)
-                    
-                    # Try loading again
-                    self.model.load_state_dict(state_dict)
-                    print("Successfully loaded model weights after recreating the model")
-        except Exception as e:
-            print(f"Error in load_weights: {e}")
-            raise
-
-    def preprocess_image(self, image):
-        """
-        Preprocess an image for the model.
-        
-        Args:
-            image: PIL Image object
-            
-        Returns:
-            torch.Tensor: Preprocessed image tensor
-        """
-        try:
-            print("Starting image preprocessing...")
             print(f"Input image size: {image.size}, mode: {image.mode}")
             
-            # Ensure image is grayscale
-            if image.mode != 'L':
-                print(f"Converting image from {image.mode} to grayscale")
-                image = image.convert('L')
-            
-            # Resize image to match training data
-            print("Resizing image...")
-            image = image.resize((64, 64))
-            print(f"Resized image size: {image.size}")
-            
-            # Convert to tensor and normalize
-            print("Converting to tensor and normalizing...")
-            transform = transforms.Compose([
-                transforms.ToTensor(),
-                transforms.Normalize((0.5,), (0.5,))
-            ])
-            image_tensor = transform(image)
-            print(f"Tensor shape: {image_tensor.shape}")
-            
-            # Move to device
-            print("Moving tensor to device...")
-            image_tensor = image_tensor.to(self.device)
+            print("Applying transformations...")
+            # Apply transformations
+            tensor = self.transform(image)
+            print(f"Tensor shape: {tensor.shape}")
             
             # Add batch dimension
-            image_tensor = image_tensor.unsqueeze(0)
-            print(f"Final tensor shape: {image_tensor.shape}")
+            tensor = tensor.unsqueeze(0)
+            print(f"Final tensor shape: {tensor.shape}")
             
-            return image_tensor
+            tensor = tensor.to(self.device)
+            print("Image preprocessed successfully")
+            return tensor
+            
         except Exception as e:
             print(f"Error in preprocess_image: {str(e)}")
             print(f"Error type: {type(e)}")
             import traceback
             print(f"Traceback: {traceback.format_exc()}")
-            raise
+            return None
 
     def evaluate_sign(self, image, expected_sign=None):
         """
@@ -227,11 +136,6 @@ class SignEvaluator:
         try:
             print("Starting sign evaluation...")
             
-            # Ensure image is grayscale
-            if image.mode != 'L':
-                print(f"Converting image from {image.mode} to grayscale")
-                image = image.convert('L')
-            
             # Preprocess the image
             print("Preprocessing image...")
             processed_image = self.preprocess_image(image)
@@ -243,7 +147,7 @@ class SignEvaluator:
                 output = self.model(processed_image)
                 probabilities = torch.nn.functional.softmax(output, dim=1)
                 confidence, predicted_idx = torch.max(probabilities, dim=1)
-                predicted_sign = self.classes[predicted_idx.item()]
+                predicted_sign = self.class_mapping[predicted_idx.item()]
                 confidence = confidence.item()
             print(f"Prediction: {predicted_sign}, Confidence: {confidence}")
             
