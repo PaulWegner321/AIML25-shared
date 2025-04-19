@@ -11,6 +11,7 @@ const FlashcardPrompt = ({ currentSign, onSignCaptured }: FlashcardPromptProps) 
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -49,6 +50,7 @@ const FlashcardPrompt = ({ currentSign, onSignCaptured }: FlashcardPromptProps) 
 
     try {
       setCameraError(null);
+      setCapturedImage(null);
       console.log('Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
@@ -120,7 +122,9 @@ const FlashcardPrompt = ({ currentSign, onSignCaptured }: FlashcardPromptProps) 
           canvasRef.current.height = videoRef.current.videoHeight;
           context.drawImage(videoRef.current, 0, 0);
           const imageData = canvasRef.current.toDataURL('image/jpeg');
+          setCapturedImage(imageData);
           onSignCaptured(imageData);
+          stopCamera();
           console.log('Sign captured successfully');
         }
       }
@@ -138,19 +142,28 @@ const FlashcardPrompt = ({ currentSign, onSignCaptured }: FlashcardPromptProps) 
       </div>
 
       <div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden mb-4">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          controls={false}
-          className={`w-full h-full object-cover ${isCameraActive ? '' : 'hidden'}`}
-          style={{ transform: 'scaleX(-1)' }}
-        />
-        {!isCameraActive && (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-gray-500">Camera is off</p>
-          </div>
+        {capturedImage ? (
+          <img
+            src={capturedImage}
+            alt="Captured sign"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              controls={false}
+              className={`w-full h-full object-cover ${isCameraActive ? '' : 'hidden'}`}
+            />
+            {!isCameraActive && (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-gray-500">Camera is off</p>
+              </div>
+            )}
+          </>
         )}
         <canvas ref={canvasRef} className="hidden" />
       </div>
@@ -162,7 +175,14 @@ const FlashcardPrompt = ({ currentSign, onSignCaptured }: FlashcardPromptProps) 
       )}
 
       <div className="flex justify-center space-x-4">
-        {!isCameraActive ? (
+        {capturedImage ? (
+          <button
+            onClick={startCamera}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Try Again
+          </button>
+        ) : !isCameraActive ? (
           <button
             onClick={startCamera}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"

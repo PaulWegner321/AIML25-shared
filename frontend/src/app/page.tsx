@@ -1,7 +1,6 @@
 "use client";
 
 import Link from 'next/link';
-import HandDetector from '@/components/HandDetector';
 
 export default function LandingPage() {
   return (
@@ -80,14 +79,6 @@ export default function LandingPage() {
           The platform uses advanced computer vision to evaluate your signing technique and provides detailed
           descriptions to help you learn new signs. Start your ASL learning journey today!
         </p>
-      </div>
-
-      <div className="w-full max-w-2xl mx-auto mt-16">
-        <HandDetector 
-          onSignDetected={(sign, confidence) => {
-            console.log(`Detected sign: ${sign} with confidence: ${confidence}`);
-          }}
-        />
       </div>
     </div>
   );
