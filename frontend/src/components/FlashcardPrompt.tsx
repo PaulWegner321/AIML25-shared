@@ -1,19 +1,29 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
 
 interface FlashcardPromptProps {
-  currentSign: string;
-  onSignCaptured: (imageData: string) => void;
+  onSignCaptured: (imageData: string, expectedSign: string) => void;
+  onCardChange: () => void;
 }
 
-const FlashcardPrompt = ({ currentSign, onSignCaptured }: FlashcardPromptProps) => {
+const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps) => {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [currentSignIndex, setCurrentSignIndex] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Define all possible signs (A-Z and 0-9)
+  const allSigns = [
+    ...Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)), // A-Z
+    ...Array.from({ length: 10 }, (_, i) => i.toString()) // 0-9
+  ];
+
+  const currentSign = allSigns[currentSignIndex];
 
   // Initialize component
   useEffect(() => {
@@ -123,7 +133,7 @@ const FlashcardPrompt = ({ currentSign, onSignCaptured }: FlashcardPromptProps) 
           context.drawImage(videoRef.current, 0, 0);
           const imageData = canvasRef.current.toDataURL('image/jpeg');
           setCapturedImage(imageData);
-          onSignCaptured(imageData);
+          onSignCaptured(imageData, currentSign);
           stopCamera();
           console.log('Sign captured successfully');
         }
@@ -134,19 +144,39 @@ const FlashcardPrompt = ({ currentSign, onSignCaptured }: FlashcardPromptProps) 
     }
   };
 
+  const handleNextCard = () => {
+    const nextIndex = (currentSignIndex + 1) % allSigns.length;
+    setCurrentSignIndex(nextIndex);
+    setCapturedImage(null);
+    onCardChange();
+    console.log('Moving to next card:', allSigns[nextIndex]);
+  };
+
+  const handlePreviousCard = () => {
+    const prevIndex = (currentSignIndex - 1 + allSigns.length) % allSigns.length;
+    setCurrentSignIndex(prevIndex);
+    setCapturedImage(null);
+    onCardChange();
+    console.log('Moving to previous card:', allSigns[prevIndex]);
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <div className="text-center mb-6">
-        <h2 className="text-2xl font-bold mb-2">Sign the Letter</h2>
+        <h2 className="text-2xl font-bold mb-2">Sign the Letter/Number</h2>
         <div className="text-6xl font-bold text-blue-600">{currentSign}</div>
+        <div className="text-sm text-gray-500 mt-2">
+          Card {currentSignIndex + 1} of {allSigns.length}
+        </div>
       </div>
 
       <div className="relative aspect-video bg-gray-100 rounded-lg overflow-hidden mb-4">
         {capturedImage ? (
-          <img
+          <Image
             src={capturedImage}
             alt="Captured sign"
-            className="w-full h-full object-cover"
+            fill
+            className="object-cover"
           />
         ) : (
           <>
@@ -174,7 +204,7 @@ const FlashcardPrompt = ({ currentSign, onSignCaptured }: FlashcardPromptProps) 
         </div>
       )}
 
-      <div className="flex justify-center space-x-4">
+      <div className="flex justify-center space-x-4 mb-4">
         {capturedImage ? (
           <button
             onClick={startCamera}
@@ -205,6 +235,21 @@ const FlashcardPrompt = ({ currentSign, onSignCaptured }: FlashcardPromptProps) 
             </button>
           </>
         )}
+      </div>
+
+      <div className="flex justify-center space-x-4">
+        <button
+          onClick={handlePreviousCard}
+          className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+        >
+          Previous
+        </button>
+        <button
+          onClick={handleNextCard}
+          className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+        >
+          Next
+        </button>
       </div>
     </div>
   );

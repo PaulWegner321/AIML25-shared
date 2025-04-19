@@ -8,10 +8,8 @@ import { API_ENDPOINTS } from '@/utils/api';
 export default function PracticePage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [currentSign, setCurrentSign] = useState('A'); // Add state for current sign
 
-  const handleSignEvaluation = async (imageData: string) => {
+  const handleSignEvaluation = async (imageData: string, expectedSign: string) => {
     try {
       console.log('Starting sign evaluation...');
       console.log('API URL:', API_ENDPOINTS.evaluateSign);
@@ -39,7 +37,7 @@ export default function PracticePage() {
       // Create FormData and append the image
       const formData = new FormData();
       formData.append('file', blob, 'sign.jpg');
-      formData.append('expected_sign', currentSign);
+      formData.append('expected_sign', expectedSign);
       console.log('FormData created with image and expected sign');
       
       // Send the request
@@ -60,12 +58,12 @@ export default function PracticePage() {
       console.log('Evaluation result:', data);
 
       if (data.success) {
-        const isCorrect = data.letter === currentSign;
+        const isCorrect = data.letter === expectedSign;
         setIsCorrect(isCorrect);
         if (isCorrect) {
           setFeedback(`Correct! You signed '${data.letter}' with ${(data.confidence * 100).toFixed(1)}% confidence.`);
         } else {
-          setFeedback(`Your sign was detected as '${data.letter}' with ${(data.confidence * 100).toFixed(1)}% confidence. Try signing '${currentSign}' again.`);
+          setFeedback(`Your sign was detected as '${data.letter}' with ${(data.confidence * 100).toFixed(1)}% confidence. Try signing '${expectedSign}' again.`);
         }
       } else {
         setFeedback(data.error || 'No hand detected. Please try again.');
@@ -78,6 +76,12 @@ export default function PracticePage() {
     }
   };
 
+  const handleCardChange = () => {
+    setFeedback('');
+    setIsCorrect(false);
+    console.log('Card changed, clearing feedback and state');
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4">
       <h1 className="text-3xl font-bold mb-8">Practice ASL Signs</h1>
@@ -85,8 +89,8 @@ export default function PracticePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
         <div>
           <FlashcardPrompt
-            currentSign={currentSign}
             onSignCaptured={handleSignEvaluation}
+            onCardChange={handleCardChange}
           />
         </div>
         
