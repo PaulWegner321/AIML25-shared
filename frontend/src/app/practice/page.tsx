@@ -41,24 +41,44 @@ export default function PracticePage() {
       console.log('FormData created with image and expected sign');
       
       // Send the request
+      console.log('Sending request to API...');
       const response = await fetch(API_ENDPOINTS.evaluateSign, {
         method: 'POST',
         body: formData,
+      }).catch(error => {
+        console.error('Fetch error:', error);
+        throw error;
       });
       
       console.log('Response received:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        console.error('Error response:', errorData);
-        throw new Error(errorData?.detail || `HTTP error! status: ${response.status}`);
+      let responseText;
+      try {
+        responseText = await response.text();
+        console.log('Raw response:', responseText);
+      } catch (error) {
+        console.error('Error reading response text:', error);
+        throw error;
       }
 
-      const data = await response.json();
-      console.log('Evaluation result:', data);
+      let data;
+      try {
+        data = JSON.parse(responseText);
+        console.log('Parsed response data:', data);
+      } catch (error) {
+        console.error('Error parsing JSON:', error);
+        throw new Error('Invalid JSON response from server');
+      }
+
+      if (!response.ok) {
+        console.error('Error response:', data);
+        throw new Error(data?.detail || `HTTP error! status: ${response.status}`);
+      }
 
       if (data.success) {
         const isCorrect = data.letter === expectedSign;
+        console.log('Setting feedback with:', { isCorrect, letter: data.letter, confidence: data.confidence });
         setIsCorrect(isCorrect);
         if (isCorrect) {
           setFeedback(`Correct! You signed '${data.letter}' with ${(data.confidence * 100).toFixed(1)}% confidence.`);
@@ -66,6 +86,7 @@ export default function PracticePage() {
           setFeedback(`Your sign was detected as '${data.letter}' with ${(data.confidence * 100).toFixed(1)}% confidence. Try signing '${expectedSign}' again.`);
         }
       } else {
+        console.log('Setting error feedback:', data.error);
         setFeedback(data.error || 'No hand detected. Please try again.');
         setIsCorrect(false);
       }
