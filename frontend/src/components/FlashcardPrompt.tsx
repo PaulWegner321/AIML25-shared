@@ -2,9 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
+import { API_ENDPOINTS } from '@/utils/api';
 
 interface FlashcardPromptProps {
-  onSignCaptured: (imageData: string, expectedSign: string) => void;
+  onSignCaptured: (imageData: string, expectedSign: string, result: any) => void;
   onCardChange: () => void;
 }
 
@@ -14,8 +15,10 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
   const [isInitialized, setIsInitialized] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [currentSignIndex, setCurrentSignIndex] = useState(0);
+  const [selectedModel, setSelectedModel] = useState('model1');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isClient, setIsClient] = useState(false);
 
   // Define all possible signs (A-Z and 0-9)
   const allSigns = [
@@ -25,8 +28,16 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
 
   const currentSign = allSigns[currentSignIndex];
 
+  // Model options
+  const modelOptions = [
+    { id: 'model1', name: 'CNN Model 1 (Current)' },
+    { id: 'model2', name: 'CNN Model 2 (Future)' },
+    { id: 'watson', name: 'Watson LLM' }
+  ];
+
   // Initialize component
   useEffect(() => {
+    setIsClient(true);
     console.log('Component mounted, initializing...');
     setIsInitialized(true);
     return () => {
@@ -123,19 +134,101 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
     }
   };
 
-  const captureSign = () => {
+  const captureSign = async () => {
     try {
       if (videoRef.current && canvasRef.current) {
         const context = canvasRef.current.getContext('2d');
         if (context) {
+          // Capture the image
           canvasRef.current.width = videoRef.current.videoWidth;
           canvasRef.current.height = videoRef.current.videoHeight;
           context.drawImage(videoRef.current, 0, 0);
           const imageData = canvasRef.current.toDataURL('image/jpeg');
           setCapturedImage(imageData);
-          onSignCaptured(imageData, currentSign);
+          
+          // Convert base64 to blob for API request
+          const base64Response = await fetch(imageData);
+          const blob = await base64Response.blob();
+          
+          let result;
+          
+          if (selectedModel === 'watson') {
+            console.log('Using Watson LLM for evaluation...');
+            // First, get the detected sign from the CNN model
+            const imageFormData = new FormData();
+            imageFormData.append('file', blob, 'webcam.jpg');
+            imageFormData.append('model_id', 'model1');
+            imageFormData.append('model_type', 'image_processing');
+            
+            console.log('Sending image to CNN model for sign detection...');
+            const cnnResponse = await fetch(API_ENDPOINTS.evaluateSign, {
+              method: 'POST',
+              body: imageFormData,
+            });
+            
+            if (!cnnResponse.ok) {
+              throw new Error(`CNN evaluation failed! status: ${cnnResponse.status}`);
+            }
+            
+            const cnnResult = await cnnResponse.json();
+            console.log('CNN detection result:', cnnResult);
+            
+            if (cnnResult.success) {
+              // Now send to LLM for evaluation
+              console.log('Sending detected sign to LLM for evaluation...');
+              const llmFormData = new FormData();
+              llmFormData.append('file', blob, 'webcam.jpg');
+              llmFormData.append('detected_sign', cnnResult.letter);
+              llmFormData.append('expected_sign', currentSign);
+              llmFormData.append('model_type', 'llm');
+              
+              const llmResponse = await fetch(API_ENDPOINTS.evaluateLLM, {
+                method: 'POST',
+                body: llmFormData,
+              });
+              
+              if (!llmResponse.ok) {
+                throw new Error(`LLM evaluation failed! status: ${llmResponse.status}`);
+              }
+              
+              const llmResult = await llmResponse.json();
+              console.log('LLM evaluation result:', llmResult);
+
+              // Combine CNN detection confidence with LLM feedback
+              result = {
+                ...llmResult,
+                confidence: cnnResult.confidence, // Use CNN's confidence as it's more relevant for sign detection
+                letter: cnnResult.letter, // Use CNN's letter detection
+              };
+            } else {
+              throw new Error('CNN failed to detect sign');
+            }
+          } else {
+            // Regular CNN model evaluation
+            console.log('Using CNN model for evaluation...');
+            const formData = new FormData();
+            formData.append('file', blob, 'webcam.jpg');
+            formData.append('model_id', selectedModel);
+            formData.append('model_type', 'image_processing');
+            formData.append('expected_sign', currentSign);
+            
+            const response = await fetch(API_ENDPOINTS.evaluateSign, {
+              method: 'POST',
+              body: formData,
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            result = await response.json();
+            console.log('CNN evaluation result:', result);
+          }
+          
+          // Call the parent component's callback with the result
+          onSignCaptured(imageData, currentSign, result);
           stopCamera();
-          console.log('Sign captured successfully');
+          console.log('Sign captured and evaluated successfully');
         }
       }
     } catch (error) {
@@ -162,6 +255,25 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
 
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
+      {/* Model Selector Dropdown */}
+      <div className="mb-4">
+        <label htmlFor="model-select" className="block text-sm font-medium text-gray-700 mb-1">
+          Select Model
+        </label>
+        <select
+          id="model-select"
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+          className="block w-full px-3 py-1.5 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 text-sm"
+        >
+          {modelOptions.map((model) => (
+            <option key={model.id} value={model.id}>
+              {model.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div className="text-center mb-6">
         <h2 className="text-2xl font-bold mb-2">Sign the Letter/Number</h2>
         <div className="text-6xl font-bold text-blue-600">{currentSign}</div>
@@ -178,7 +290,7 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
             fill
             className="object-cover"
           />
-        ) : (
+        ) : isClient ? (
           <>
             <video
               ref={videoRef}
@@ -194,6 +306,10 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
               </div>
             )}
           </>
+        ) : (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-gray-500">Loading camera...</p>
+          </div>
         )}
         <canvas ref={canvasRef} className="hidden" />
       </div>

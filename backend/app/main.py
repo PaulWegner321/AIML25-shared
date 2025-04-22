@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
@@ -9,6 +9,7 @@ import cv2
 
 # Import the HandDetector
 from .models.keypoint_detector import HandDetector
+from .services.llm_evaluator import LLMEvaluator
 
 # Load environment variables
 load_dotenv()
@@ -53,6 +54,7 @@ class SignEvaluationResponse(BaseModel):
     letter: Optional[str] = None
     confidence: Optional[float] = None
     error: Optional[str] = None
+    feedback: Optional[str] = None
 
 # Define response models
 class TranslationResponse(BaseModel):
@@ -64,6 +66,7 @@ class JudgmentResponse(BaseModel):
 
 # Initialize model instances
 hand_detector = HandDetector()
+llm_evaluator = LLMEvaluator()
 
 @app.get("/")
 async def root():
@@ -74,7 +77,12 @@ async def root():
     }
 
 @app.post("/evaluate-sign", response_model=SignEvaluationResponse)
-async def evaluate_sign(file: UploadFile = File(...), expected_sign: str = None):
+async def evaluate_sign(
+    file: UploadFile = File(...), 
+    expected_sign: str = Form(None),
+    model_id: str = Form("model1"),
+    model_type: str = Form("image_processing")
+):
     try:
         # Read and decode image
         contents = await file.read()
@@ -105,13 +113,49 @@ async def evaluate_sign(file: UploadFile = File(...), expected_sign: str = None)
                 success=True,
                 letter=result['letter'],
                 confidence=result['confidence'],
-                error=None if is_correct else feedback
+                error=None if is_correct else feedback,
+                feedback=feedback
             )
         
         return SignEvaluationResponse(
             success=True,
             letter=result['letter'],
             confidence=result['confidence']
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/evaluate-llm", response_model=SignEvaluationResponse)
+async def evaluate_llm(
+    file: UploadFile = File(...),
+    model_id: str = Form("watson"),
+    model_type: str = Form("llm"),
+    detected_sign: str = Form(...)
+):
+    try:
+        # Read and decode image
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if image is None:
+            raise HTTPException(status_code=400, detail="Invalid image file")
+        
+        # Evaluate using LLM
+        result = llm_evaluator.evaluate(image, detected_sign)
+        
+        if not result['success']:
+            return SignEvaluationResponse(
+                success=False,
+                error=result.get('error', 'Failed to evaluate with LLM')
+            )
+        
+        return SignEvaluationResponse(
+            success=True,
+            letter=detected_sign,
+            confidence=result.get('confidence', 0.0),
+            feedback=result.get('feedback', 'No feedback available')
         )
         
     except Exception as e:
