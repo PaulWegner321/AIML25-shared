@@ -7,6 +7,8 @@ import FeedbackBox from '@/components/FeedbackBox';
 export default function PracticePage() {
   const [feedback, setFeedback] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
+  const [detectedLetter, setDetectedLetter] = useState<string | null>(null);
+  const [confidence, setConfidence] = useState<number | null>(null);
 
   const handleSignEvaluation = async (imageData: string, expectedSign: string, result: any) => {
     try {
@@ -16,6 +18,8 @@ export default function PracticePage() {
         const isCorrect = result.letter === expectedSign;
         console.log('Setting feedback with:', { isCorrect, letter: result.letter, confidence: result.confidence });
         setIsCorrect(isCorrect);
+        setDetectedLetter(result.letter);
+        setConfidence(result.confidence);
 
         // If there's LLM feedback, use that instead of the generic feedback
         if (result.feedback && result.feedback !== '1.') {
@@ -31,17 +35,23 @@ export default function PracticePage() {
         console.log('Setting error feedback:', result.error);
         setFeedback(result.error || 'No hand detected. Please try again.');
         setIsCorrect(false);
+        setDetectedLetter(null);
+        setConfidence(null);
       }
     } catch (error) {
       console.error('Error processing evaluation:', error);
       setFeedback(error instanceof Error ? error.message : 'Error processing evaluation. Please try again.');
       setIsCorrect(false);
+      setDetectedLetter(null);
+      setConfidence(null);
     }
   };
 
   const handleCardChange = () => {
     setFeedback('');
     setIsCorrect(false);
+    setDetectedLetter(null);
+    setConfidence(null);
     console.log('Card changed, clearing feedback and state');
   };
 
@@ -61,6 +71,8 @@ export default function PracticePage() {
           <FeedbackBox
             feedback={feedback}
             isCorrect={isCorrect}
+            detectedLetter={detectedLetter}
+            confidence={confidence}
           />
         </div>
       </div>

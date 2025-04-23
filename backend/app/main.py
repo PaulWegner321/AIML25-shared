@@ -129,9 +129,9 @@ async def evaluate_sign(
 @app.post("/evaluate-llm", response_model=SignEvaluationResponse)
 async def evaluate_llm(
     file: UploadFile = File(...),
-    model_id: str = Form("watson"),
-    model_type: str = Form("llm"),
-    detected_sign: str = Form(...)
+    mode: str = Form("full"),
+    expected_sign: str = Form(None),
+    detected_sign: str = Form(None)
 ):
     try:
         # Read and decode image
@@ -143,7 +143,12 @@ async def evaluate_llm(
             raise HTTPException(status_code=400, detail="Invalid image file")
         
         # Evaluate using LLM
-        result = llm_evaluator.evaluate(image, detected_sign)
+        result = llm_evaluator.evaluate(
+            image=image,
+            detected_sign=detected_sign,
+            expected_sign=expected_sign,
+            mode=mode
+        )
         
         if not result['success']:
             return SignEvaluationResponse(
@@ -153,12 +158,13 @@ async def evaluate_llm(
         
         return SignEvaluationResponse(
             success=True,
-            letter=detected_sign,
+            letter=result.get('letter', detected_sign),
             confidence=result.get('confidence', 0.0),
             feedback=result.get('feedback', 'No feedback available')
         )
         
     except Exception as e:
+        print(f"Error in evaluate_llm: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/translate", response_model=TranslationResponse)

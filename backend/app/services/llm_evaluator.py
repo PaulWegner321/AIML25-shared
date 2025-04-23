@@ -56,13 +56,15 @@ class LLMEvaluator:
             self.client = None
             self.model = None
 
-    def evaluate(self, image, detected_sign):
+    def evaluate(self, image, detected_sign=None, expected_sign=None, mode='full'):
         """
         Evaluate an image using the Watson LLM.
         
         Args:
             image: OpenCV image
-            detected_sign: The sign detected by the CNN model
+            detected_sign: The sign detected by the CNN model (optional)
+            expected_sign: The expected sign (optional)
+            mode: 'full' for complete evaluation, 'feedback' for improvement suggestions
             
         Returns:
             dict: Evaluation result with success, feedback, and confidence
@@ -79,32 +81,69 @@ class LLMEvaluator:
             _, buffer = cv2.imencode('.jpg', image)
             img_str = base64.b64encode(buffer).decode('utf-8')
             
-            # Create the prompt for the LLM
-            prompt = f"""You are an American Sign Language (ASL) expert. I will show you a sign that was detected as the letter '{detected_sign}'. 
-            
-Please provide a brief but detailed feedback focusing on:
-1. Accuracy of the detected sign
-2. Common confusions with other letters
-3. Key hand positions for this sign
-4. Quick tips for improvement
+            if mode == 'feedback':
+                # Create prompt for improvement feedback
+                prompt = f"""You are an American Sign Language (ASL) expert. The CNN model detected the sign as '{detected_sign}' when the expected sign was '{expected_sign}'.
 
-Keep your response concise but informative. Focus on practical advice.
+Please provide specific feedback on:
+1. Why the sign might have been misinterpreted
+2. Key differences between '{detected_sign}' and '{expected_sign}'
+3. Specific tips to improve the signing of '{expected_sign}'
+
+Keep your response focused on helping the user improve their signing.
 
 Feedback:"""
+            else:
+                # Create prompt for full evaluation
+                prompt = f"""You are an American Sign Language (ASL) expert evaluating a sign image. 
+
+You must respond with a JSON object in exactly this format:
+{{
+    "letter": "A",  // The letter you believe is being signed (A-Z or 0-9)
+    "confidence": 0.85,  // Your confidence score between 0 and 1
+    "feedback": "Detailed feedback about the sign, including proper hand position and any suggestions for improvement"
+}}
+
+Consider:
+1. The letter being signed
+2. Your confidence in the interpretation
+3. Proper hand positioning
+4. Common mistakes to avoid
+5. Tips for improvement
+
+Ensure your response is ONLY the JSON object with these exact fields.
+
+Response:"""
             
             # Generate response from WatsonX
             response = self.model.generate(prompt)
-            feedback = response["results"][0]["generated_text"].strip()
             
-            # Calculate a confidence score based on the length and specificity of the feedback
-            # This is a simple heuristic - you might want to adjust this
-            confidence = min(0.95, 0.5 + (len(feedback.split()) / 100))
-            
-            return {
-                'success': True,
-                'feedback': feedback,
-                'confidence': confidence
-            }
+            if mode == 'feedback':
+                feedback = response["results"][0]["generated_text"].strip()
+                return {
+                    'success': True,
+                    'feedback': feedback,
+                    'confidence': detected_sign == expected_sign
+                }
+            else:
+                # Parse the LLM's JSON response
+                try:
+                    import json
+                    result = json.loads(response["results"][0]["generated_text"].strip())
+                    return {
+                        'success': True,
+                        'letter': result['letter'],
+                        'confidence': float(result['confidence']),
+                        'feedback': result['feedback']
+                    }
+                except json.JSONDecodeError:
+                    # If JSON parsing fails, return the raw response as feedback
+                    feedback = response["results"][0]["generated_text"].strip()
+                    return {
+                        'success': True,
+                        'feedback': feedback,
+                        'confidence': 0.5  # Default confidence when parsing fails
+                    }
             
         except Exception as e:
             print(f"Error evaluating with LLM: {str(e)}")

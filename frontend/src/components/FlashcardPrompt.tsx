@@ -146,6 +146,9 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
           const imageData = canvasRef.current.toDataURL('image/jpeg');
           setCapturedImage(imageData);
           
+          // Stop the camera immediately after capturing
+          stopCamera();
+          
           // Convert base64 to blob for API request
           const base64Response = await fetch(imageData);
           const blob = await base64Response.blob();
@@ -153,56 +156,23 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
           let result;
           
           if (selectedModel === 'watson') {
-            console.log('Using Watson LLM for evaluation...');
-            // First, get the detected sign from the CNN model
-            const imageFormData = new FormData();
-            imageFormData.append('file', blob, 'webcam.jpg');
-            imageFormData.append('model_id', 'model1');
-            imageFormData.append('model_type', 'image_processing');
+            console.log('Using Watson LLM for full evaluation...');
+            const formData = new FormData();
+            formData.append('file', blob, 'webcam.jpg');
+            formData.append('expected_sign', currentSign);
+            formData.append('mode', 'full');
             
-            console.log('Sending image to CNN model for sign detection...');
-            const cnnResponse = await fetch(API_ENDPOINTS.evaluateSign, {
+            const llmResponse = await fetch(API_ENDPOINTS.evaluateLLM, {
               method: 'POST',
-              body: imageFormData,
+              body: formData,
             });
             
-            if (!cnnResponse.ok) {
-              throw new Error(`CNN evaluation failed! status: ${cnnResponse.status}`);
+            if (!llmResponse.ok) {
+              throw new Error(`LLM evaluation failed! status: ${llmResponse.status}`);
             }
             
-            const cnnResult = await cnnResponse.json();
-            console.log('CNN detection result:', cnnResult);
-            
-            if (cnnResult.success) {
-              // Now send to LLM for evaluation
-              console.log('Sending detected sign to LLM for evaluation...');
-              const llmFormData = new FormData();
-              llmFormData.append('file', blob, 'webcam.jpg');
-              llmFormData.append('detected_sign', cnnResult.letter);
-              llmFormData.append('expected_sign', currentSign);
-              llmFormData.append('model_type', 'llm');
-              
-              const llmResponse = await fetch(API_ENDPOINTS.evaluateLLM, {
-                method: 'POST',
-                body: llmFormData,
-              });
-              
-              if (!llmResponse.ok) {
-                throw new Error(`LLM evaluation failed! status: ${llmResponse.status}`);
-              }
-              
-              const llmResult = await llmResponse.json();
-              console.log('LLM evaluation result:', llmResult);
-
-              // Combine CNN detection confidence with LLM feedback
-              result = {
-                ...llmResult,
-                confidence: cnnResult.confidence, // Use CNN's confidence as it's more relevant for sign detection
-                letter: cnnResult.letter, // Use CNN's letter detection
-              };
-            } else {
-              throw new Error('CNN failed to detect sign');
-            }
+            result = await llmResponse.json();
+            console.log('LLM evaluation result:', result);
           } else {
             // Regular CNN model evaluation
             console.log('Using CNN model for evaluation...');
@@ -223,11 +193,32 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
             
             result = await response.json();
             console.log('CNN evaluation result:', result);
+
+            // If the sign is wrong, get improvement feedback from LLM
+            if (result.success && result.letter !== currentSign) {
+              console.log('Sign was incorrect, getting improvement feedback...');
+              const feedbackFormData = new FormData();
+              feedbackFormData.append('file', blob, 'webcam.jpg');
+              feedbackFormData.append('detected_sign', result.letter);
+              feedbackFormData.append('expected_sign', currentSign);
+              feedbackFormData.append('mode', 'feedback');
+              
+              const feedbackResponse = await fetch(API_ENDPOINTS.evaluateLLM, {
+                method: 'POST',
+                body: feedbackFormData,
+              });
+              
+              if (feedbackResponse.ok) {
+                const feedbackResult = await feedbackResponse.json();
+                console.log('LLM feedback:', feedbackResult);
+                // Add the LLM feedback to the result
+                result.feedback = feedbackResult.feedback;
+              }
+            }
           }
           
           // Call the parent component's callback with the result
           onSignCaptured(imageData, currentSign, result);
-          stopCamera();
           console.log('Sign captured and evaluated successfully');
         }
       }
@@ -235,6 +226,12 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
       console.error('Error capturing sign:', error);
       setCameraError('Failed to capture sign');
     }
+  };
+
+  const handleTryAgain = () => {
+    setCapturedImage(null);
+    setCameraError(null);
+    startCamera();
   };
 
   const handleNextCard = () => {
@@ -323,7 +320,7 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
       <div className="flex justify-center space-x-4 mb-4">
         {capturedImage ? (
           <button
-            onClick={startCamera}
+            onClick={handleTryAgain}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             Try Again
