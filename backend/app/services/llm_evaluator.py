@@ -101,16 +101,20 @@ You must respond with a JSON object in exactly this format:
 {{
     "letter": "A",  // The letter you believe is being signed (A-Z or 0-9)
     "confidence": 0.85,  // Your confidence score between 0 and 1
-    "feedback": "Detailed feedback about the sign, including proper hand position and any suggestions for improvement"
+    "feedback": "Provide specific, actionable feedback. If the sign is correct but could be improved, mention those small adjustments. If it's perfect, simply say 'Perfect! Your hand position and form are exactly right.' For incorrect signs, explain exactly what needs to be fixed."
 }}
 
-Consider:
-1. The letter being signed
-2. Your confidence in the interpretation
-3. Proper hand positioning
-4. Common mistakes to avoid
-5. Tips for improvement
+When providing feedback:
+1. Focus on actionable improvements, not just descriptions
+2. For correct signs:
+   - If perfect: Keep it simple and congratulatory
+   - If minor issues: Suggest small refinements (e.g., "Try keeping your fingers slightly closer together")
+3. For incorrect signs:
+   - Explain specifically what needs to change
+   - Provide clear steps for improvement
+   - Compare with the correct form
 
+Keep feedback concise and action-oriented. Avoid just describing what you see.
 Ensure your response is ONLY the JSON object with these exact fields.
 
 Response:"""
@@ -129,20 +133,51 @@ Response:"""
                 # Parse the LLM's JSON response
                 try:
                     import json
-                    result = json.loads(response["results"][0]["generated_text"].strip())
+                    raw_text = response["results"][0]["generated_text"].strip()
+                    print(f"Raw LLM response: {raw_text}")  # Debug log
+                    
+                    # Try to find and extract just the JSON object
+                    import re
+                    json_match = re.search(r'\{[^}]+\}', raw_text)
+                    if json_match:
+                        json_text = json_match.group(0)
+                        # Fix potential capitalization issues in the feedback field
+                        json_text = json_text.replace('"Feedback":', '"feedback":')
+                        result = json.loads(json_text)
+                        
+                        # Validate required fields
+                        if not all(key in result for key in ['letter', 'confidence', 'feedback']):
+                            raise ValueError("Missing required fields in LLM response")
+                            
+                        return {
+                            'success': True,
+                            'letter': result['letter'],
+                            'confidence': float(result['confidence']),
+                            'feedback': result['feedback']
+                        }
+                    else:
+                        raise ValueError("No JSON object found in LLM response")
+                        
+                except (json.JSONDecodeError, ValueError) as e:
+                    print(f"Error parsing LLM response: {str(e)}")
+                    print(f"Raw response was: {raw_text}")
+                    
+                    # Extract any useful information from the raw text if possible
+                    letter_match = re.search(r'"letter":\s*"([^"]+)"', raw_text)
+                    confidence_match = re.search(r'"confidence":\s*([\d.]+)', raw_text)
+                    feedback_match = re.search(r'"[Ff]eedback":\s*"([^"]+)"', raw_text)
+                    
                     return {
                         'success': True,
-                        'letter': result['letter'],
-                        'confidence': float(result['confidence']),
-                        'feedback': result['feedback']
+                        'letter': letter_match.group(1) if letter_match else detected_sign or 'Unknown',
+                        'confidence': float(confidence_match.group(1)) if confidence_match else 0.5,
+                        'feedback': feedback_match.group(1) if feedback_match else "I apologize, but I couldn't properly analyze your sign. Please try again, making sure your hand is clearly visible and well-lit."
                     }
-                except json.JSONDecodeError:
-                    # If JSON parsing fails, return the raw response as feedback
-                    feedback = response["results"][0]["generated_text"].strip()
+                except Exception as e:
+                    print(f"Unexpected error processing LLM response: {str(e)}")
                     return {
-                        'success': True,
-                        'feedback': feedback,
-                        'confidence': 0.5  # Default confidence when parsing fails
+                        'success': False,
+                        'error': "An error occurred while analyzing your sign. Please try again."
                     }
             
         except Exception as e:

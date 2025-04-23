@@ -15,32 +15,33 @@ export default function PracticePage() {
       console.log('Processing evaluation result:', result);
       
       if (result.success) {
-        const isCorrect = result.letter === expectedSign;
-        console.log('Setting feedback with:', { isCorrect, letter: result.letter, confidence: result.confidence });
-        setIsCorrect(isCorrect);
-        setDetectedLetter(result.letter);
-        setConfidence(result.confidence);
+        // Extract the values, ensuring they exist
+        const letter = result.letter || 'Unknown';
+        const confidence = typeof result.confidence === 'number' ? result.confidence : 0.5;
+        const feedback = result.feedback || 'No feedback available';
 
-        // If there's LLM feedback, use that instead of the generic feedback
-        if (result.feedback && result.feedback !== '1.') {
-          setFeedback(result.feedback);
-        } else {
-          if (isCorrect) {
-            setFeedback(`Correct! You signed '${result.letter}' with ${(result.confidence * 100).toFixed(1)}% confidence.`);
-          } else {
-            setFeedback(`Your sign was detected as '${result.letter}' with ${(result.confidence * 100).toFixed(1)}% confidence. Try signing '${expectedSign}' again.`);
-          }
-        }
+        const isCorrect = letter === expectedSign;
+        console.log('Setting feedback with:', { isCorrect, letter, confidence, feedback });
+
+        // Update state with the processed values
+        setIsCorrect(isCorrect);
+        setDetectedLetter(letter);
+        setConfidence(confidence);
+        setFeedback(feedback);
       } else {
+        // Handle error case
         console.log('Setting error feedback:', result.error);
-        setFeedback(result.error || 'No hand detected. Please try again.');
+        const errorMessage = result.error || 'No hand detected. Please try again.';
+        setFeedback(errorMessage);
         setIsCorrect(false);
         setDetectedLetter(null);
         setConfidence(null);
       }
     } catch (error) {
+      // Handle unexpected errors
       console.error('Error processing evaluation:', error);
-      setFeedback(error instanceof Error ? error.message : 'Error processing evaluation. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Error processing evaluation. Please try again.';
+      setFeedback(errorMessage);
       setIsCorrect(false);
       setDetectedLetter(null);
       setConfidence(null);
@@ -48,8 +49,8 @@ export default function PracticePage() {
   };
 
   const handleCardChange = () => {
-    setFeedback('');
-    setIsCorrect(false);
+    setFeedback(null);
+    setIsCorrect(null);
     setDetectedLetter(null);
     setConfidence(null);
     console.log('Card changed, clearing feedback and state');

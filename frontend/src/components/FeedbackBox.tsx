@@ -65,11 +65,17 @@ const FeedbackBox = ({ feedback, isCorrect, detectedLetter, confidence }: Feedba
         </div>
       )}
 
-      {/* LLM Feedback Box - Only shown when incorrect */}
-      {feedback && !isCorrect && (
-        <Tooltip text="Detailed feedback about your sign and suggestions for improvement">
-          <div className="bg-red-100 text-red-900 p-4 rounded-lg mb-4 relative">
-            <h3 className="text-sm font-medium mb-2">Improvement Feedback</h3>
+      {/* Feedback Box - Shown for both correct and incorrect signs */}
+      {feedback && (
+        <Tooltip text={isCorrect ? "Analysis of your correct sign" : "Detailed feedback about your sign and suggestions for improvement"}>
+          <div 
+            className={`${
+              isCorrect ? 'bg-green-100 text-green-900' : 'bg-red-100 text-red-900'
+            } p-4 rounded-lg mb-4 relative`}
+          >
+            <h3 className="text-sm font-medium mb-2">
+              {isCorrect ? 'Analysis' : 'Improvement Feedback'}
+            </h3>
             <p className="font-medium">{feedback}</p>
           </div>
         </Tooltip>
