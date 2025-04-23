@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import FlashcardPrompt from '@/components/FlashcardPrompt';
 import FeedbackBox from '@/components/FeedbackBox';
+import { SignEvaluationHandler } from '@/types/evaluation';
 
 export default function PracticePage() {
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -10,7 +11,7 @@ export default function PracticePage() {
   const [detectedLetter, setDetectedLetter] = useState<string | null>(null);
   const [confidence, setConfidence] = useState<number | null>(null);
 
-  const handleSignEvaluation = async (imageData: string, expectedSign: string, result: any) => {
+  const handleSignEvaluation: SignEvaluationHandler = async (imageData, expectedSign, result) => {
     try {
       console.log('Processing evaluation result:', result);
       

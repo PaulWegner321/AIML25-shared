@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -17,7 +17,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     if (isOpen) {
       onClose();
     }
-  }, [pathname]);
+  }, [pathname, isOpen, onClose]);
 
   const navItems = [
     { name: 'Home', path: '/' },

@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { API_ENDPOINTS } from '@/utils/api';
+import { SignEvaluationHandler } from '@/types/evaluation';
 
 interface FlashcardPromptProps {
-  onSignCaptured: (imageData: string, expectedSign: string, result: any) => void;
+  onSignCaptured: SignEvaluationHandler;
   onCardChange: () => void;
 }
 
