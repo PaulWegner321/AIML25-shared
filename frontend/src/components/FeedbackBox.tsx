@@ -27,33 +27,44 @@ interface FeedbackBoxProps {
   isCorrect: boolean | null;
   detectedLetter: string | null;
   confidence: number | null;
+  expectedLetter?: string | null;
 }
 
-const FeedbackBox = ({ feedback, isCorrect, detectedLetter, confidence }: FeedbackBoxProps) => {
+const FeedbackBox = ({ feedback, isCorrect, detectedLetter, confidence, expectedLetter }: FeedbackBoxProps) => {
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <h2 className="text-2xl font-bold mb-4">Feedback</h2>
       
       {/* Result Boxes - Only shown after evaluation */}
       {detectedLetter !== null && confidence !== null && (
-        <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className={`grid ${isCorrect ? 'grid-cols-2' : 'grid-cols-3'} gap-4 mb-6`}>
           {/* Detected Letter Box */}
           <Tooltip text="The letter that was detected from your hand sign">
             <div 
               className={`p-4 rounded-lg relative ${
-                isCorrect ? 'bg-green-100 text-green-900' : 'bg-red-100 text-red-900'
+                isCorrect ? 'bg-green-100 text-green-900' : 'bg-orange-100 text-orange-900'
               }`}
             >
-              <h3 className="text-sm font-medium mb-1">Detected Letter</h3>
+              <h3 className="text-sm font-medium mb-1">Detected Sign</h3>
               <p className="text-2xl font-bold">{detectedLetter}</p>
             </div>
           </Tooltip>
+
+          {/* Expected Letter Box - Only shown when there's a mismatch */}
+          {!isCorrect && expectedLetter && (
+            <Tooltip text="The letter you were supposed to sign according to the flashcard">
+              <div className="p-4 rounded-lg relative bg-blue-100 text-blue-900">
+                <h3 className="text-sm font-medium mb-1">Expected Sign</h3>
+                <p className="text-2xl font-bold">{expectedLetter}</p>
+              </div>
+            </Tooltip>
+          )}
 
           {/* Confidence Score Box */}
           <Tooltip text="How confident the model is in its detection (0-100%)">
             <div 
               className={`p-4 rounded-lg relative ${
-                isCorrect ? 'bg-green-100 text-green-900' : 'bg-red-100 text-red-900'
+                isCorrect ? 'bg-green-100 text-green-900' : 'bg-orange-100 text-orange-900'
               }`}
             >
               <h3 className="text-sm font-medium mb-1">Confidence</h3>
@@ -70,7 +81,7 @@ const FeedbackBox = ({ feedback, isCorrect, detectedLetter, confidence }: Feedba
         <Tooltip text={isCorrect ? "Analysis of your correct sign" : "Detailed feedback about your sign and suggestions for improvement"}>
           <div 
             className={`${
-              isCorrect ? 'bg-green-100 text-green-900' : 'bg-red-100 text-red-900'
+              isCorrect ? 'bg-green-100 text-green-900' : 'bg-orange-100 text-orange-900'
             } p-4 rounded-lg mb-4 relative`}
           >
             <h3 className="text-sm font-medium mb-2">

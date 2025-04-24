@@ -1,0 +1,29 @@
+{
+  "expected_sign": null,
+  "detected_sign": null,
+  "response": {
+    "id": "chatcmpl-dd610bb4c68e482ab6622368a184107a",
+    "object": "chat.completion",
+    "model_id": "ibm/granite-vision-3-2-2b",
+    "model": "ibm/granite-vision-3-2-2b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"letter\": \"I\",\n  \"confidence\": 100,\n  \"feedback\": \"The hand is in a 'I' shape with the index and middle fingers extended and the other fingers curled.\"\n}"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "created": 1745504300,
+    "model_version": "1.0.0",
+    "created_at": "2025-04-24T14:18:20.936Z",
+    "usage": {
+      "completion_tokens": 50,
+      "prompt_tokens": 262,
+      "total_tokens": 312
+    }
+  },
+  "extracted_text": "{\n  \"letter\": \"I\",\n  \"confidence\": 100,\n  \"feedback\": \"The hand is in a 'I' shape with the index and middle fingers extended and the other fingers curled.\"\n}"
+}

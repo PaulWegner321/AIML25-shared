@@ -143,8 +143,18 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
           // Capture the image
           canvasRef.current.width = videoRef.current.videoWidth;
           canvasRef.current.height = videoRef.current.videoHeight;
+          
+          // Flip horizontally for a mirror effect - this fixes the common "mirroring" issue
+          // with webcam previews that can cause confusion when showing sign language
+          context.translate(canvasRef.current.width, 0);
+          context.scale(-1, 1);
           context.drawImage(videoRef.current, 0, 0);
+          
+          // Restore context transformation
+          context.setTransform(1, 0, 0, 1, 0, 0);
+          
           const imageData = canvasRef.current.toDataURL('image/jpeg');
+          console.log('Image captured, size:', canvasRef.current.width, 'x', canvasRef.current.height);
           setCapturedImage(imageData);
           
           // Stop the camera immediately after capturing
@@ -160,13 +170,17 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
             console.log('Using Granite Vision for full evaluation...');
             const formData = new FormData();
             formData.append('file', blob, 'webcam.jpg');
-            formData.append('expected_sign', currentSign);
+            
+            // Don't pass expected_sign to avoid biasing the model
+            // Instead pass what the user is trying to sign as debug info only
+            formData.append('user_intention', `User is attempting to sign "${currentSign}"`);
             formData.append('mode', 'full');
             formData.append('model_id', 'granite-vision');
             formData.append('model_type', 'llm');
             
             const apiUrl = API_ENDPOINTS.evaluateVision;
             console.log('Sending request to:', apiUrl);
+            console.log('Expected sign:', currentSign);
             
             // Test backend connection first
             try {
