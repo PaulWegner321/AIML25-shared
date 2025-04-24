@@ -10,6 +10,6 @@ console.log('Using API URL:', API_URL);
 
 export const API_ENDPOINTS = {
   evaluateSign: `${API_URL}/evaluate-sign`,
-  evaluateLLM: `${API_URL}/evaluate-llm`,
+  evaluateVision: `${API_URL}/evaluate-vision`,
   signDescription: `${API_URL}/sign-description`,
 }; 
