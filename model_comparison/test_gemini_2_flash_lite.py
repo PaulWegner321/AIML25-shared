@@ -15,20 +15,18 @@ from typing import Literal
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Load environment variables from the correct path
-# Ensure this runs only once if the script is imported multiple times
-if 'GOOGLE_API_KEY' not in globals():
-    dotenv_path = os.path.join('../../backend', '.env')
-    load_dotenv(dotenv_path=dotenv_path)
-    print(f"Loading .env file from: {dotenv_path}")
+# Load environment variables from backend/.env
+dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend', '.env')
+load_dotenv(dotenv_path=dotenv_path)
+print(f"Loading .env file from: {dotenv_path}")
 
-    # Get Google API credentials
-    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-    if not GOOGLE_API_KEY:
-        raise ValueError("Google API key not found in environment variables. Please check your .env file.")
+# Get Google API credentials
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+if not GOOGLE_API_KEY:
+    raise ValueError("Google API key not found in environment variables. Please check your .env file.")
 
-    # Initialize the Gemini client
-    client = genai.Client(api_key=GOOGLE_API_KEY)
+# Initialize the Gemini client
+client = genai.Client(api_key=GOOGLE_API_KEY)
 
 # Model configurations
 MODEL_CONFIGS = {

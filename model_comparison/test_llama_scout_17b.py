@@ -16,8 +16,8 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Load environment variables from the correct path
-dotenv_path = os.path.join('../../backend', '.env')
+# Load environment variables from backend/.env
+dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend', '.env')
 load_dotenv(dotenv_path=dotenv_path)
 print(f"Loading .env file from: {dotenv_path}")
 

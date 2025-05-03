@@ -16,8 +16,8 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Load environment variables from the correct path
-dotenv_path = os.path.join('../../backend', '.env')
+# Load environment variables from backend/.env
+dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend', '.env')
 load_dotenv(dotenv_path=dotenv_path)
 print(f"Loading .env file from: {dotenv_path}")
 
@@ -170,7 +170,7 @@ def get_asl_prediction(image_path: str, strategy: str = "zero-shot") -> Dict[str
                 "content": [
                     {
                         "type": "text",
-                        "text": "Look at the image I provided. Can you see a hand gesture? If yes, describe what you see. If no, say 'No, I cannot see the image'."
+                        "text": "I am sending you an image. Please respond with 'Yes, I can see the image' if you can see it, or 'No, I cannot see the image' if you cannot. Do not provide any additional description or explanation."
                     },
                     {
                         "type": "image_url",
