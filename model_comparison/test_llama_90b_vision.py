@@ -32,67 +32,90 @@ if not all([WATSONX_API_KEY, WATSONX_PROJECT_ID]):
 # Model ID
 MODEL_ID = "meta-llama/llama-3-2-90b-vision-instruct"
 
-# Prompting strategies
-ZERO_SHOT_PROMPT = """You are a professional ASL interpreter. Analyze the hand gesture shown in the image.
+# Prompt templates
+PROMPT_TEMPLATES = {
+"zero_shot": """You are an expert in American Sign Language (ASL) recognition. Analyze the provided image and identify the ASL letter being signed (A-Z).
 
-It is one of these 29 American Sign Language symbols:
-A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, space, delete, nothing.
-
-Respond **only** with a JSON object in the following format:
+Respond only with a valid JSON object, using this format:
 {
-  "letter": "your_single_choice_from_above",
-  "confidence": number_from_0_to_100,
-  "feedback": "brief explanation of visible hand shape"
+  "letter": "A single uppercase letter (A-Z)",
+  "confidence": "confidence score (0-1)",
+  "feedback": "A short explanation of how the gesture maps to the predicted letter"
+}
+Be precise and avoid adding anything outside the JSON response.""",
+
+"few_shot": """You are an expert in American Sign Language (ASL) recognition. Analyze the provided image and identify the ASL letter being signed (A-Z).
+
+Here are some known ASL hand signs:
+- A: Fist with thumb resting on the side
+- B: Flat open hand, fingers extended upward, thumb across the palm
+- C: Hand curved into the shape of the letter C
+- D: Index finger up, thumb touching middle finger forming an oval
+- E: Fingers bent, thumb tucked under
+
+Respond only with a JSON object like this:
+{
+  "letter": "A single uppercase letter (A-Z)",
+  "confidence": "confidence score (0-1)",
+  "feedback": "Why this gesture matches the predicted letter"
+}
+Only return the JSON object. No explanations before or after.""",
+
+"chain_of_thought": """You are an expert in American Sign Language (ASL) recognition. Carefully analyze the provided image step-by-step to identify the ASL letter (A-Z).
+
+1. Describe the hand shape
+2. Describe the finger and thumb positions
+3. Compare these to known ASL letter signs
+4. Identify the most likely letter
+
+Then output your answer as JSON:
+{
+  "letter": "A single uppercase letter (A-Z)",
+  "confidence": "confidence score (0-1),
+  "feedback": "Summarize your reasoning in one sentence"
+}
+Return only the JSON object with no extra text.""",
+
+"visual_grounding": """You are an expert in American Sign Language (ASL) recognition. Carefully analyze the provided image of a hand gesture and determine which ASL letter (A–Z) it represents.
+
+To guide your analysis, consider the following:
+- Which fingers are extended or bent?
+- Is the thumb visible, and where is it positioned?
+- What is the orientation of the palm (facing forward, sideways, etc.)?
+- Are there any unique shapes formed (e.g., circles, fists, curves)?
+
+Now, based on this visual inspection, provide your prediction in the following JSON format:
+
+{
+  "letter": "predicted letter (A-Z)",
+  "confidence": "confidence score (0–1)",
+  "feedback": "brief explanation describing the observed hand shape and reasoning"
 }
 
-Do not infer based on context or imagination. Only use the visible hand shape."""
+Be precise, use visual clues from the image, and avoid guessing without justification.""",
 
-FEW_SHOT_PROMPT = """You are a professional ASL interpreter. Here are some examples of ASL hand gestures and their interpretations:
+"contrastive": """You are an expert in American Sign Language (ASL) recognition. Analyze the provided image of a hand gesture and identify the correct ASL letter.
 
-Example 1:
-Hand shape: Index and middle fingers forming a V shape, palm facing forward
-Letter: V
-Confidence: 95
-Feedback: Clear V-shape formed by extended index and middle fingers
+Consider the following candidate letters: A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
+(These letters are visually similar and often confused.)
 
-Example 2:
-Hand shape: Closed fist with thumb across palm
-Letter: A
-Confidence: 90
-Feedback: Fist position with thumb laid flat against side
+Step-by-step:
+1. Observe the hand shape, finger positions, and thumb placement.
+2. Compare the observed gesture against the typical signs for each candidate letter.
+3. Eliminate unlikely candidates based on visible differences.
+4. Choose the most plausible letter and explain your reasoning.
 
-Now, analyze the hand gesture shown in the image.
-It is one of these 29 American Sign Language symbols:
-A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, space, delete, nothing.
+Format your response as JSON:
 
-Respond **only** with a JSON object in the following format:
 {
-  "letter": "your_single_choice_from_above",
-  "confidence": number_from_0_to_100,
-  "feedback": "brief explanation of visible hand shape"
+  "letter": "predicted letter from candidates",
+  "confidence": "confidence score (0–1)",
+  "feedback": "why this letter was selected over the others"
 }
 
-Do not infer based on context or imagination. Only use the visible hand shape."""
+Be analytical and compare carefully to avoid misclassification."""
 
-CHAIN_OF_THOUGHT_PROMPT = """You are a professional ASL interpreter. Let's analyze the hand gesture shown in the image step by step:
-
-1. First, observe the overall hand position and orientation
-2. Look at the finger positions and relationships
-3. Note any distinctive features (bent fingers, touching points, etc.)
-4. Compare to known ASL letter formations
-5. Make your determination based on the closest match
-
-The sign must be one of these 29 American Sign Language symbols:
-A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, space, delete, nothing.
-
-After your analysis, respond **only** with a JSON object in the following format:
-{
-  "letter": "your_single_choice_from_above",
-  "confidence": number_from_0_to_100,
-  "feedback": "brief explanation including your step-by-step analysis"
 }
-
-Do not infer based on context or imagination. Only use the visible hand shape."""
 
 def estimate_tokens(text: str) -> int:
     """Estimate the number of tokens in a text string (1 token ≈ 4 characters)."""
@@ -253,7 +276,7 @@ def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Test Llama 90B Vision model with different prompting strategies')
     parser.add_argument('--image', type=str, help='Path to the image file')
-    parser.add_argument('--prompt-strategy', type=str, choices=['zero-shot', 'few-shot', 'chain-of-thought'],
+    parser.add_argument('--prompt-strategy', type=str, choices=['zero-shot', 'few-shot', 'chain-of-thought', 'visual-grounding', 'contrastive'],
                       default='zero-shot', help='Prompting strategy to use')
     args = parser.parse_args()
     

@@ -109,9 +109,9 @@ def main():
     sampled_images = []
     for letter, images in images_by_letter.items():
         if len(images) > args.sample_size:
-            sampled_images.extend(random.sample(images, args.sample_size))
+            sampled_images.extend([(img, letter) for img in random.sample(images, args.sample_size)])
         else:
-            sampled_images.extend(images)
+            sampled_images.extend([(img, letter) for img in images])
 
     if not sampled_images:
         logging.error("No images loaded for evaluation")
@@ -236,24 +236,29 @@ def main():
             return None
 
     def load_dataset_sample(dataset_path_str, sample_size=1):
-        """Load a single random image from the dataset."""
+        """Load sample_size random images from each letter in the dataset."""
         dataset_path = Path(dataset_path_str)
         if not dataset_path.exists():
             raise ValueError(f"Dataset path {dataset_path} does not exist")
         
-        all_images = []
+        sampled_images = []
         for letter_dir in dataset_path.iterdir():
             if letter_dir.is_dir():
                 letter = letter_dir.name
-                images = list(letter_dir.glob("*.jpg"))
-                if images:
-                    all_images.extend([(str(img_path), letter) for img_path in images])
+                # Only process directories that are single letters (A-Z)
+                if len(letter) == 1 and letter.isalpha():
+                    images = list(letter_dir.glob("*.jpg"))
+                    if images:
+                        # Sample min(sample_size, available_images) images from this letter
+                        num_samples = min(sample_size, len(images))
+                        selected_images = random.sample(images, num_samples)
+                        sampled_images.extend([(str(img_path), letter) for img_path in selected_images])
         
-        if not all_images:
-            raise ValueError("No images found in the dataset")
+        if not sampled_images:
+            raise ValueError("No images found in dataset")
         
-        # Return a single random image
-        return [random.choice(all_images)]
+        logging.info(f"Sampled {len(sampled_images)} images total ({sample_size} per letter)")
+        return sampled_images
 
     def get_prediction(model_name, image_path, prompt_strategy="zero_shot"):
         """Get prediction from the specified model."""
@@ -452,20 +457,13 @@ def main():
         return stats
 
     def evaluate_models(dataset_path, sample_size=1, output_dir="evaluation_results"):
-        """Evaluates all models on the dataset with all prompt strategies."""
-        # Create output directory if it doesn't exist
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
+        """Evaluate all models on the dataset."""
+        timestamp = time.strftime("%Y%m%d_%H%M%S")
+        output_file = os.path.join(output_dir, f"evaluation_results_{timestamp}.json")
         
-        # Load dataset sample - get one random image
-        image_paths = load_dataset_sample(dataset_path, sample_size)
-        if not image_paths:
-            logging.error("No images loaded for evaluation")
-            return
-        
-        # Get the single image and its true letter
-        image_path, true_letter = image_paths[0]
-        logging.info(f"\nEvaluating all models on image: {image_path} (true letter: {true_letter})")
+        # Load and sample images
+        sampled_images = load_dataset_sample(dataset_path, sample_size)
+        logging.info(f"Evaluating {len(sampled_images)} images across all models")
         
         # Initialize results tracking
         results = {model: {
@@ -484,96 +482,75 @@ def main():
             } for strategy in PROMPT_STRATEGIES}
         } for model in MODELS_TO_EVALUATE}
         
-        # Initialize misclassified dictionary for each model and letter
         misclassified = {model: {letter: [] for letter in VALID_CLASSES} for model in MODELS_TO_EVALUATE}
         
-        # Evaluate each model with each prompt strategy
-        for model_name in MODELS_TO_EVALUATE:
-            logging.info(f"\nEvaluating {model_name}...")
+        # Evaluate each image with each model
+        for image_path, true_letter in sampled_images:
+            logging.info(f"\nEvaluating image: {image_path} (true letter: {true_letter})")
             
-            for prompt_strategy in PROMPT_STRATEGIES:
-                logging.info(f"\nTesting {model_name} with {prompt_strategy} prompting...")
-                
-                prediction_result, response_time, token_usage = get_prediction(
-                    model_name,
-                    image_path,
-                    prompt_strategy=prompt_strategy
-                )
-                
-                result = handle_result(
-                    model_name,
-                    prediction_result,
-                    true_letter,
-                    image_path,
-                    response_time,
-                    token_usage,
-                    prompt_strategy=prompt_strategy
-                )
-                
-                # Add delay between requests to respect rate limits
-                time.sleep(2)
-                
-                # Update results
-                results[model_name]["total"] += 1
-                results[model_name]["response_times"].append(response_time)
-                results[model_name]["token_usage"].append(token_usage)
-                
-                results[model_name]["prompt_strategy_results"][prompt_strategy]["total"] += 1
-                results[model_name]["prompt_strategy_results"][prompt_strategy]["response_times"].append(response_time)
-                results[model_name]["prompt_strategy_results"][prompt_strategy]["token_usage"].append(token_usage)
-                
-                if "error" in result:
-                    logging.error(f"Error for {model_name}: {result['error']}")
-                    results[model_name]["errors"] += 1
-                    if "cannot see the image" in result["error"].lower():
-                        results[model_name]["visibility_failed"] += 1
-                    elif "rate limit" in result["error"].lower():
-                        results[model_name]["rate_limit_errors"] += 1
-                else:
-                    if result["is_correct"]:
-                        results[model_name]["correct"] += 1
-                        results[model_name]["prompt_strategy_results"][prompt_strategy]["correct"] += 1
-                        logging.info(f"Correct prediction for {model_name}: {result['prediction']}")
-                    else:
-                        misclassified[model_name][true_letter].append((image_path, result["prediction"]))
-                        logging.info(f"Misclassification for {model_name}: predicted {result['prediction']}, actual {true_letter}")
+            for model_name in MODELS_TO_EVALUATE:
+                logging.info(f"\nTesting model: {model_name}")
+                for prompt_strategy in PROMPT_STRATEGIES:
+                    try:
+                        prediction_result, response_time, token_usage = get_prediction(model_name, image_path, prompt_strategy)
+                        result = handle_result(
+                            model_name,
+                            prediction_result,
+                            true_letter,
+                            image_path,
+                            response_time=response_time,
+                            token_usage=token_usage,
+                            prompt_strategy=prompt_strategy
+                        )
+                        
+                        # Update results
+                        results[model_name]["total"] += 1
+                        results[model_name]["response_times"].append(response_time)
+                        results[model_name]["token_usage"].append(token_usage)
+                        
+                        results[model_name]["prompt_strategy_results"][prompt_strategy]["total"] += 1
+                        results[model_name]["prompt_strategy_results"][prompt_strategy]["response_times"].append(response_time)
+                        results[model_name]["prompt_strategy_results"][prompt_strategy]["token_usage"].append(token_usage)
+                        
+                        if "error" in result:
+                            logging.error(f"Error for {model_name}: {result['error']}")
+                            results[model_name]["errors"] += 1
+                            if "cannot see the image" in result["error"].lower():
+                                results[model_name]["visibility_failed"] += 1
+                            elif "rate limit" in result["error"].lower():
+                                results[model_name]["rate_limit_errors"] += 1
+                        else:
+                            if result["is_correct"]:
+                                results[model_name]["correct"] += 1
+                                results[model_name]["prompt_strategy_results"][prompt_strategy]["correct"] += 1
+                                logging.info(f"Correct prediction for {model_name}: {result['prediction']}")
+                            else:
+                                misclassified[model_name][true_letter].append((image_path, result["prediction"]))
+                                logging.info(f"Misclassification for {model_name}: predicted {result['prediction']}, actual {true_letter}")
+                    
+                    except Exception as e:
+                        logging.error(f"Error evaluating {model_name} on {image_path}: {str(e)}")
+                        results[model_name]["errors"] += 1
+                        results[model_name]["total"] += 1
         
         # Calculate statistics
-        stats = calculate_statistics(results, misclassified)
+        statistics = calculate_statistics(results, misclassified)
         
         # Save results
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        results_file = output_path / f"evaluation_results_{timestamp}.json"
+        evaluation_results = {
+            "timestamp": timestamp,
+            "dataset_path": dataset_path,
+            "sample_size": sample_size,
+            "results": results,
+            "misclassified": misclassified,
+            "statistics": statistics
+        }
         
-        with open(results_file, 'w') as f:
-            json.dump({
-                "timestamp": timestamp,
-                "dataset_path": str(dataset_path),
-                "sample_size": sample_size,
-                "results": results,
-                "misclassified": misclassified,
-                "statistics": stats
-            }, f, indent=2)
+        with open(output_file, 'w') as f:
+            json.dump(evaluation_results, f, indent=2)
         
-        logging.info(f"\nResults saved to {results_file}")
-        logging.info("\nModel Performance Summary:")
-        for model_name, model_stats in stats.items():
-            logging.info(f"\n{model_name}:")
-            logging.info(f"  Overall Accuracy: {model_stats['accuracy']:.2%}")
-            logging.info(f"  Error Rate: {model_stats['error_rate']:.2%}")
-            logging.info(f"  Visibility Failure Rate: {model_stats['visibility_failure_rate']:.2%}")
-            logging.info(f"  Rate Limit Error Rate: {model_stats['rate_limit_error_rate']:.2%}")
-            logging.info(f"  Average Response Time: {model_stats['avg_response_time']:.2f}s")
-            logging.info(f"  Response Time Std Dev: {model_stats['std_response_time']:.2f}s")
-            logging.info(f"  Average Token Usage: {model_stats['avg_token_usage']:.0f}")
-            logging.info(f"  Token Usage Std Dev: {model_stats['std_token_usage']:.0f}")
-            
-            logging.info("\n  Prompt Strategy Results:")
-            for strategy, strategy_stats in model_stats["prompt_strategy_results"].items():
-                logging.info(f"    {strategy}:")
-                logging.info(f"      Accuracy: {strategy_stats['accuracy']:.2%}")
-                logging.info(f"      Average Response Time: {strategy_stats['avg_response_time']:.2f}s")
-                logging.info(f"      Average Token Usage: {strategy_stats['avg_token_usage']:.0f}")
+        logging.info(f"\nEvaluation results saved to: {output_file}")
+        return evaluation_results
 
     evaluate_models(
         dataset_path,

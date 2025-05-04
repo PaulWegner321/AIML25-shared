@@ -30,61 +30,87 @@ openai.api_key = OPENAI_API_KEY
 
 # Prompt templates
 PROMPT_TEMPLATES = {
-    "zero_shot": """You are a professional ASL interpreter. Analyze the hand gesture shown in the image.
+"zero_shot": """You are an expert in American Sign Language (ASL) recognition. Analyze the provided image and identify the ASL letter being signed (A-Z).
 
-It is one of these 29 American Sign Language symbols:
-A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, space, delete, nothing.
-
-Respond **only** with a JSON object in the following format:
+Respond only with a valid JSON object, using this format:
 {
-  "letter": "your_single_choice_from_above",
-  "confidence": number_from_0_to_100,
-  "feedback": "brief explanation of visible hand shape"
+  "letter": "A single uppercase letter (A-Z)",
+  "confidence": "confidence score (0-1)",
+  "feedback": "A short explanation of how the gesture maps to the predicted letter"
+}
+Be precise and avoid adding anything outside the JSON response.""",
+
+"few_shot": """You are an expert in American Sign Language (ASL) recognition. Analyze the provided image and identify the ASL letter being signed (A-Z).
+
+Here are some known ASL hand signs:
+- A: Fist with thumb resting on the side
+- B: Flat open hand, fingers extended upward, thumb across the palm
+- C: Hand curved into the shape of the letter C
+- D: Index finger up, thumb touching middle finger forming an oval
+- E: Fingers bent, thumb tucked under
+
+Respond only with a JSON object like this:
+{
+  "letter": "A single uppercase letter (A-Z)",
+  "confidence": "confidence score (0-1)",
+  "feedback": "Why this gesture matches the predicted letter"
+}
+Only return the JSON object. No explanations before or after.""",
+
+"chain_of_thought": """You are an expert in American Sign Language (ASL) recognition. Carefully analyze the provided image step-by-step to identify the ASL letter (A-Z).
+
+1. Describe the hand shape
+2. Describe the finger and thumb positions
+3. Compare these to known ASL letter signs
+4. Identify the most likely letter
+
+Then output your answer as JSON:
+{
+  "letter": "A single uppercase letter (A-Z)",
+  "confidence": "confidence score (0-1),
+  "feedback": "Summarize your reasoning in one sentence"
+}
+Return only the JSON object with no extra text.""",
+
+"visual_grounding": """You are an expert in American Sign Language (ASL) recognition. Carefully analyze the provided image of a hand gesture and determine which ASL letter (A–Z) it represents.
+
+To guide your analysis, consider the following:
+- Which fingers are extended or bent?
+- Is the thumb visible, and where is it positioned?
+- What is the orientation of the palm (facing forward, sideways, etc.)?
+- Are there any unique shapes formed (e.g., circles, fists, curves)?
+
+Now, based on this visual inspection, provide your prediction in the following JSON format:
+
+{
+  "letter": "predicted letter (A-Z)",
+  "confidence": "confidence score (0–1)",
+  "feedback": "brief explanation describing the observed hand shape and reasoning"
 }
 
-Do not infer based on context or imagination. Only use the visible hand shape.""",
+Be precise, use visual clues from the image, and avoid guessing without justification.""",
 
-    "few_shot": """You are a professional ASL interpreter. Analyze the hand gesture shown in the image.
+"contrastive": """You are an expert in American Sign Language (ASL) recognition. Analyze the provided image of a hand gesture and identify the correct ASL letter.
 
-Here are some examples of ASL letters and their characteristics:
-- A: Fist with thumb alongside fingers
-- B: Flat hand, fingers together, thumb alongside
-- C: Curved hand, thumb and fingers forming a C shape
-- D: Index finger pointing up, other fingers closed
-- E: Fingers slightly curved, thumb alongside
+Consider the following candidate letters: A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z
+(These letters are visually similar and often confused.)
 
-It is one of these 29 American Sign Language symbols:
-A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, space, delete, nothing.
+Step-by-step:
+1. Observe the hand shape, finger positions, and thumb placement.
+2. Compare the observed gesture against the typical signs for each candidate letter.
+3. Eliminate unlikely candidates based on visible differences.
+4. Choose the most plausible letter and explain your reasoning.
 
-Respond **only** with a JSON object in the following format:
+Format your response as JSON:
+
 {
-  "letter": "your_single_choice_from_above",
-  "confidence": number_from_0_to_100,
-  "feedback": "brief explanation of visible hand shape"
+  "letter": "predicted letter from candidates",
+  "confidence": "confidence score (0–1)",
+  "feedback": "why this letter was selected over the others"
 }
 
-Do not infer based on context or imagination. Only use the visible hand shape.""",
+Be analytical and compare carefully to avoid misclassification."""
 
-    "chain_of_thought": """You are a professional ASL interpreter. Analyze the hand gesture shown in the image.
-
-Let's analyze this step by step:
-1. First, observe the overall hand shape and orientation
-2. Then, examine the position of each finger and the thumb
-3. Compare these observations with known ASL letter formations
-4. Consider any unique characteristics or distinguishing features
-5. Finally, make your prediction based on the complete analysis
-
-It is one of these 29 American Sign Language symbols:
-A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z, space, delete, nothing.
-
-Respond **only** with a JSON object in the following format:
-{
-  "letter": "your_single_choice_from_above",
-  "confidence": number_from_0_to_100,
-  "feedback": "brief explanation of visible hand shape"
-}
-
-Do not infer based on context or imagination. Only use the visible hand shape."""
 }
 
 def encode_image_base64(image_path):
@@ -107,7 +133,7 @@ def encode_image_base64(image_path):
         logging.error(f"Error encoding image: {e}")
         raise
 
-def get_asl_prediction(image_path: str, prompt_strategy: Literal["zero_shot", "few_shot", "chain_of_thought"] = "zero_shot") -> dict:
+def get_asl_prediction(image_path: str, prompt_strategy: Literal["zero_shot", "few_shot", "chain_of_thought", "visual_grounding", "contrastive"] = "zero_shot") -> dict:
     """Get ASL prediction from GPT-4 Turbo Vision model."""
     start_time = time.time()
     
@@ -215,7 +241,7 @@ def main():
     parser.add_argument('--image', type=str, default="data/V/V_17_20250428_114126.jpg",
                         help='Path to the image file to test')
     parser.add_argument('--prompt-strategy', type=str, 
-                        choices=['zero_shot', 'few_shot', 'chain_of_thought'], 
+                        choices=['zero_shot', 'few_shot', 'chain_of_thought', 'visual_grounding', 'contrastive'], 
                         default='zero_shot',
                         help='Prompting strategy to use')
     args = parser.parse_args()
