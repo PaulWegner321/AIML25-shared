@@ -14,9 +14,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 class ColorASLCNN(nn.Module):
     def __init__(self):
         super(ColorASLCNN, self).__init__()
-        # Define the convolutional layers for RGB input (3 channels)
+        # Define the convolutional layers for grayscale input (1 channel)
         self.conv_layers = nn.Sequential(
-            nn.Conv2d(3, 32, kernel_size=3, padding=1),
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(kernel_size=2),  # 64x64 -> 32x32
             nn.Conv2d(32, 64, kernel_size=3, padding=1),
@@ -37,7 +37,7 @@ class ColorASLCNN(nn.Module):
         # After 4 max pooling layers: 64x64 -> 32x32 -> 16x16 -> 8x8 -> 4x4
         # With 128 channels: 128 * 4 * 4 = 2048
         self.fc1 = nn.Linear(2048, 512)
-        self.fc2 = nn.Linear(512, 29)  # Output layer for 29 classes (A-Z, space, delete, nothing)
+        self.fc2 = nn.Linear(512, 26)  # Output layer for 26 classes (A-Z)
         self.dropout = nn.Dropout(0.5)
 
     def forward(self, x):
@@ -60,14 +60,13 @@ class SignEvaluator:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = self._load_model()
         self.transform = transforms.Compose([
-            transforms.Resize((64, 64)),  # Keep RGB images at 64x64
+            transforms.Resize((64, 64)),  # Resize to 64x64
+            transforms.Grayscale(num_output_channels=1),  # Convert to grayscale
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])  # Normalize RGB
+            transforms.Normalize(mean=[0.5], std=[0.5])  # Normalize grayscale
         ])
-        # Define class labels (A-Z, space, delete, nothing)
-        self.class_mapping = {}
-        for i in range(26):  # A-Z
-            self.class_mapping[i] = chr(i + 65)
+        # Define class labels (A-Z)
+        self.class_mapping = {i: chr(i + 65) for i in range(26)}  # A-Z only
         self.class_mapping[26] = 'space'
         self.class_mapping[27] = 'delete'
         self.class_mapping[28] = 'nothing'

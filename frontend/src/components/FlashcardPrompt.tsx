@@ -39,10 +39,8 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
   // Initialize component
   useEffect(() => {
     setIsClient(true);
-    console.log('Component mounted, initializing...');
     setIsInitialized(true);
     return () => {
-      console.log('Component unmounting, cleaning up...');
       stopCamera();
     };
   }, []);
@@ -50,11 +48,9 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
   // Effect to handle camera state changes
   useEffect(() => {
     if (isCameraActive && videoRef.current) {
-      console.log('Camera active, ensuring video is playing');
       const playVideo = async () => {
         try {
           await videoRef.current?.play();
-          console.log('Video playback started from useEffect');
         } catch (error) {
           console.error('Error playing video from useEffect:', error);
         }
@@ -65,7 +61,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
 
   const startCamera = async () => {
     if (!isInitialized) {
-      console.log('Component not fully initialized yet, waiting...');
       setTimeout(startCamera, 100);
       return;
     }
@@ -73,7 +68,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
     try {
       setCameraError(null);
       setCapturedImage(null);
-      console.log('Requesting camera access...');
       const stream = await navigator.mediaDevices.getUserMedia({ 
         video: { 
           width: { ideal: 1280 },
@@ -82,17 +76,12 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
         } 
       });
       
-      console.log('Camera access granted, stream obtained');
-      
       if (videoRef.current) {
-        console.log('Setting video source...');
         videoRef.current.srcObject = stream;
         
         // Set up event listeners for video element
         videoRef.current.onloadedmetadata = () => {
-          console.log('Video metadata loaded');
           setIsCameraActive(true);
-          console.log('Camera started successfully');
         };
         
         videoRef.current.onerror = (e) => {
@@ -103,7 +92,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
         // Force play the video
         try {
           await videoRef.current.play();
-          console.log('Video playback started');
         } catch (playError) {
           console.error('Error playing video:', playError);
           setCameraError('Error playing video stream');
@@ -124,12 +112,10 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => {
           track.stop();
-          console.log('Camera track stopped');
         });
         videoRef.current.srcObject = null;
       }
       setIsCameraActive(false);
-      console.log('Camera stopped successfully');
     } catch (error) {
       console.error('Error stopping camera:', error);
     }
@@ -154,7 +140,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
           context.setTransform(1, 0, 0, 1, 0, 0);
           
           const imageData = canvasRef.current.toDataURL('image/jpeg');
-          console.log('Image captured, size:', canvasRef.current.width, 'x', canvasRef.current.height);
           setCapturedImage(imageData);
           
           // Stop the camera immediately after capturing
@@ -167,7 +152,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
           let result;
           
           if (selectedModel === 'granite-vision') {
-            console.log('Using Granite Vision for full evaluation...');
             const formData = new FormData();
             formData.append('file', blob, 'webcam.jpg');
             
@@ -178,34 +162,22 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
             formData.append('model_id', 'granite-vision');
             formData.append('model_type', 'llm');
             
-            const apiUrl = API_ENDPOINTS.evaluateVision;
-            console.log('Sending request to:', apiUrl);
-            console.log('Expected sign:', currentSign);
-            
             // Test backend connection first
             try {
-              const pingResponse = await fetch(API_ENDPOINTS.evaluateSign.split('/').slice(0, 3).join('/') + '/ping', { 
-                method: 'GET',
-                mode: 'cors',
-                headers: { 'Accept': 'application/json' }
-              });
-              console.log('Backend ping response:', pingResponse.status);
             } catch (pingError) {
               console.error('Cannot reach backend:', pingError);
             }
             
             try {
               // Correct file upload approach (matching our test page)
-              console.log('Sending image with dimensions:', videoRef.current?.videoWidth, 'x', videoRef.current?.videoHeight);
               
               // Set a timeout controller for the fetch
               const controller = new AbortController();
               const timeoutId = setTimeout(() => {
-                console.log("Request timed out after 20 seconds");
                 controller.abort();
               }, 20000); // 20 second timeout
               
-              const visionResponse = await fetch(apiUrl, {
+              const visionResponse = await fetch(API_ENDPOINTS.evaluateVision, {
                 method: 'POST',
                 mode: 'cors',
                 headers: {
@@ -218,8 +190,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
               // Clear the timeout
               clearTimeout(timeoutId);
               
-              console.log('Response status:', visionResponse.status);
-              
               if (!visionResponse.ok) {
                 const errorText = await visionResponse.text();
                 console.error('Vision model error response:', errorText);
@@ -228,19 +198,15 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
               
               // Try to parse the response as JSON
               try {
-                result = await visionResponse.json();
-                console.log('Granite Vision evaluation result:', result);
               } catch (jsonError) {
                 console.error('Error parsing JSON response:', jsonError);
                 const textResponse = await visionResponse.text();
-                console.log('Raw response text:', textResponse);
                 throw new Error('Invalid JSON in response');
               }
               
             } catch (error) {
               console.error('API call error:', error);
               // Try a fallback offline response for demo purposes
-              console.log('Using offline fallback response');
               result = {
                 success: true,
                 letter: currentSign,
@@ -251,7 +217,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
             }
           } else {
             // Regular CNN model evaluation
-            console.log('Using CNN model for evaluation...');
             const formData = new FormData();
             formData.append('file', blob, 'webcam.jpg');
             formData.append('model_id', selectedModel);
@@ -268,11 +233,9 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
             }
             
             result = await response.json();
-            console.log('CNN evaluation result:', result);
 
             // If the sign is wrong, get improvement feedback from LLM
             if (result.success && result.letter !== currentSign) {
-              console.log('Sign was incorrect, getting improvement feedback...');
               const feedbackFormData = new FormData();
               feedbackFormData.append('file', blob, 'webcam.jpg');
               feedbackFormData.append('detected_sign', result.letter);
@@ -281,37 +244,8 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
               feedbackFormData.append('model_id', 'granite-vision');
               feedbackFormData.append('model_type', 'llm');
               
-              console.log('Sending feedback request to:', API_ENDPOINTS.evaluateVision);
-              
               try {
-                const feedbackResponse = await fetch(API_ENDPOINTS.evaluateVision, {
-                  method: 'POST',
-                  mode: 'cors',
-                  headers: {
-                    'Accept': 'application/json',
-                  },
-                  body: feedbackFormData
-                });
-                
-                console.log('Feedback response status:', feedbackResponse.status);
-                
-                if (feedbackResponse.ok) {
-                  try {
-                    const feedbackResult = await feedbackResponse.json();
-                    console.log('Granite Vision feedback:', feedbackResult);
-                    // Add the LLM feedback to the result
-                    result.feedback = feedbackResult.feedback;
-                  } catch (jsonError) {
-                    console.error('Error parsing feedback JSON:', jsonError);
-                    const rawFeedback = await feedbackResponse.text();
-                    console.log('Raw feedback response:', rawFeedback);
-                  }
-                } else {
-                  const errorText = await feedbackResponse.text();
-                  console.error('Feedback error response:', errorText);
-                }
               } catch (error) {
-                console.error('Feedback API error:', error);
                 // Continue even if feedback fails - don't break the main flow
               }
             }
@@ -319,7 +253,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
           
           // Call the parent component's callback with the result
           onSignCaptured(imageData, currentSign, result);
-          console.log('Sign captured and evaluated successfully');
         }
       }
     } catch (error) {
@@ -339,7 +272,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
     setCurrentSignIndex(nextIndex);
     setCapturedImage(null);
     onCardChange();
-    console.log('Moving to next card:', allSigns[nextIndex]);
   };
 
   const handlePreviousCard = () => {
@@ -347,7 +279,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
     setCurrentSignIndex(prevIndex);
     setCapturedImage(null);
     onCardChange();
-    console.log('Moving to previous card:', allSigns[prevIndex]);
   };
 
   return (
