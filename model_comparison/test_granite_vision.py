@@ -10,6 +10,7 @@ from PIL import Image
 import io
 from dotenv import load_dotenv
 from typing import Literal
+from io import BytesIO
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -109,31 +110,40 @@ Be analytical and compare carefully to avoid misclassification."""
 
 }
 
-def encode_image_base64(image_path, resize_dim=(512, 512)):
-    """Process image and return base64 string with data URI prefix."""
+def encode_image_base64(image_path):
+    """Encode image to base64 string with proper format for Granite Vision."""
     try:
-        with Image.open(image_path) as img:
-            # Convert to RGB if necessary
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
+        # Open and convert to RGB
+        img = Image.open(image_path).convert('RGB')
+        
+        # Calculate new dimensions while maintaining aspect ratio
+        max_size = 1024
+        ratio = min(max_size / img.width, max_size / img.height)
+        new_size = (int(img.width * ratio), int(img.height * ratio))
+        
+        # Resize with high-quality resampling
+        img = img.resize(new_size, Image.Resampling.LANCZOS)
             
-            # Resize if needed
-            if max(img.size) > max(resize_dim):
-                img.thumbnail(resize_dim)
+        # Save to bytes with JPEG format and maximum quality
+        buffer = BytesIO()
+        img.save(buffer, format='JPEG', quality=100, optimize=True)
+        buffer.seek(0)
             
-            # Save to bytes
-            buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", quality=95)
-            image_bytes = buffer.getvalue()
+        # Encode to base64
+        img_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+        
+        # Clean the base64 string
+        img_str = img_str.replace('\n', '')
+        
+        # Create the full data URI with proper MIME type
+        data_uri = f"data:image/jpeg;base64,{img_str}"
             
-            # Create base64 string with data URI prefix
-            base64_str = base64.b64encode(image_bytes).decode('utf-8')
-            data_uri = f"data:image/jpeg;base64,{base64_str}"
-            
-            logging.debug(f"Image processed successfully. Size: {len(base64_str)} bytes")
-            return data_uri
+        # Log the data URI format (truncated for readability)
+        logging.info(f"Image data URI format: {data_uri[:100]}...")
+        
+        return data_uri
     except Exception as e:
-        logging.error(f"Error processing image {image_path}: {e}")
+        logging.error(f"Error encoding image: {str(e)}")
         raise
 
 def get_watsonx_token(api_key):
@@ -164,16 +174,23 @@ def get_asl_prediction(image_path: str, prompt_strategy: Literal["zero_shot", "f
     try:
         token = get_watsonx_token(WATSONX_API_KEY)
         if not token:
-            return {"error": "Failed to get authentication token", "metadata": {"response_time_seconds": round(time.time() - start_time, 3)}}
+            return {
+                "error": "Failed to get authentication token",
+                "metadata": {
+                    "response_time": round(time.time() - start_time, 3),
+                    "model": "granite_vision",
+                    "strategy": prompt_strategy
+                }
+            }
 
         # Process image and get data URI
         image_data_uri = encode_image_base64(image_path)
 
-        # First, test if the model can see the image
-        visibility_test_prompt = "Can you see the image I provided? Please respond with 'Yes, I can see the image' or 'No, I cannot see the image'."
-        visibility_check_tokens = estimate_tokens(visibility_test_prompt)
+        # Get the appropriate prompt template
+        prompt_template = PROMPT_TEMPLATES.get(prompt_strategy, PROMPT_TEMPLATES["zero_shot"])
 
-        visibility_test_payload = {
+        # Create the payload with the actual ASL prediction request
+        payload = {
             "model_id": GRANITE_MODEL_ID,
             "project_id": WATSONX_PROJECT_ID,
             "messages": [
@@ -182,7 +199,7 @@ def get_asl_prediction(image_path: str, prompt_strategy: Literal["zero_shot", "f
                     "content": [
                         {
                             "type": "text",
-                            "text": visibility_test_prompt
+                            "text": prompt_template
                         },
                         {
                             "type": "image_url",
@@ -195,130 +212,84 @@ def get_asl_prediction(image_path: str, prompt_strategy: Literal["zero_shot", "f
             ]
         }
 
+        # Make the API request
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
 
-        # Make the visibility test API request
-        visibility_response = requests.post(
-            "https://us-south.ml.cloud.ibm.com/ml/v1/text/chat?version=2023-05-29",
-            headers=headers,
-            json=visibility_test_payload,
-            timeout=30
-        )
-
-        if visibility_response.status_code != 200:
-            logging.error(f"Visibility test failed: {visibility_response.status_code} - {visibility_response.text}")
-            return {
-                "error": f"Visibility test failed: {visibility_response.status_code}",
-                "metadata": {
-                    "response_time_seconds": round(time.time() - start_time, 3),
-                    "visibility_check_tokens": visibility_check_tokens
-                }
-            }
-
-        visibility_result = visibility_response.json()
-        visibility_text = visibility_result.get("choices", [{}])[0].get("message", {}).get("content", "")
-        
-        if "cannot see" in visibility_text.lower():
-            logging.error("Model cannot see the image. Please check the image format and encoding.")
-            return {
-                "error": "Model cannot see the image",
-                "metadata": {
-                    "response_time_seconds": round(time.time() - start_time, 3),
-                    "visibility_check_tokens": visibility_check_tokens
-                }
-            }
-
-        # If visibility test passed, proceed with the ASL sign recognition
-        logging.info("Proceeding with ASL sign recognition...")
-
-        # Get appropriate prompt template
-        prompt = PROMPT_TEMPLATES[prompt_strategy]
-        asl_recognition_tokens = estimate_tokens(prompt)
-
-        # Prepare the API request for ASL recognition
-        asl_payload = {
-            "model_id": GRANITE_MODEL_ID,
-            "project_id": WATSONX_PROJECT_ID,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": image_data_uri
-                            }
-                        }
-                    ]
-                }
-            ]
-        }
-
-        # Make the ASL recognition API request
         response = requests.post(
             "https://us-south.ml.cloud.ibm.com/ml/v1/text/chat?version=2023-05-29",
             headers=headers,
-            json=asl_payload,
-            timeout=30
+            json=payload,
+            timeout=60
         )
+        
+        response.raise_for_status()
+        result = response.json()
+        
+        # Extract the generated text
+        generated_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+        
+        # Clean the response text - remove any markdown code blocks
+        generated_text = generated_text.replace("```json", "").replace("```", "").strip()
+        
+        # Parse the JSON response
+        try:
+            prediction = json.loads(generated_text)
+            if not isinstance(prediction, dict):
+                raise ValueError("Response is not a valid JSON object")
+            if "letter" not in prediction:
+                raise ValueError("Response missing 'letter' field")
 
-        if response.status_code != 200:
-            logging.error(f"API request failed: {response.status_code} - {response.text}")
+            # Calculate response time
+            response_time = time.time() - start_time
+            
+            # Return the prediction in the format expected by evaluate_models.py
             return {
-                "error": f"API request failed: {response.status_code}",
+                "letter": prediction["letter"],
+                "confidence": prediction.get("confidence", 0.0),
+                "feedback": prediction.get("feedback", ""),
                 "metadata": {
-                    "response_time_seconds": round(time.time() - start_time, 3),
-                    "visibility_check_tokens": visibility_check_tokens,
-                    "asl_recognition_tokens": asl_recognition_tokens,
-                    "total_tokens": visibility_check_tokens + asl_recognition_tokens
+                    "response_time": round(response_time, 3),
+                    "model": "granite_vision",
+                    "strategy": prompt_strategy
                 }
             }
-
-        response_data = response.json()
-        generated_text = response_data.get("choices", [{}])[0].get("message", {}).get("content", "")
-
-        # Calculate total response time
-        response_time = time.time() - start_time
-
-        json_start = generated_text.find('{')
-        json_end = generated_text.rfind('}') + 1
-        if json_start >= 0 and json_end > json_start:
-            json_str = generated_text[json_start:json_end]
-            result = json.loads(json_str)
             
-            # Add timing and token information to the result
-            result["metadata"] = {
-                "response_time_seconds": round(response_time, 3),
-                "visibility_check_tokens": visibility_check_tokens,
-                "asl_recognition_tokens": asl_recognition_tokens,
-                "total_tokens": visibility_check_tokens + asl_recognition_tokens
-            }
-            return result
-        else:
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse JSON response: {e}")
+            logging.error(f"Raw response: {generated_text}")
             return {
-                "error": "No JSON found in response",
+                "error": "Invalid JSON response from model",
                 "raw_response": generated_text,
                 "metadata": {
-                    "response_time_seconds": round(response_time, 3),
-                    "visibility_check_tokens": visibility_check_tokens,
-                    "asl_recognition_tokens": asl_recognition_tokens,
-                    "total_tokens": visibility_check_tokens + asl_recognition_tokens
+                    "response_time": round(time.time() - start_time, 3),
+                    "model": "granite_vision",
+                    "strategy": prompt_strategy
+                }
+            }
+        except ValueError as e:
+            logging.error(f"Invalid response format: {e}")
+            return {
+                "error": str(e),
+                "metadata": {
+                    "response_time": round(time.time() - start_time, 3),
+                    "model": "granite_vision",
+                    "strategy": prompt_strategy
                 }
             }
 
     except Exception as e:
         response_time = time.time() - start_time
-        logging.error(f"Error getting prediction: {e}")
+        logging.error(f"Error in ASL prediction: {e}")
         return {
             "error": str(e),
-            "metadata": {"response_time_seconds": round(response_time, 3)}
+            "metadata": {
+                "response_time": round(response_time, 3),
+                "model": "granite_vision",
+                "strategy": prompt_strategy
+            }
         }
     finally:
         # Add a delay to respect rate limits

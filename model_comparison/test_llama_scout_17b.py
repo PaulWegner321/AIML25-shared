@@ -10,8 +10,9 @@ import io
 import time
 import re
 import argparse
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Literal
 from tenacity import retry, stop_after_attempt, wait_exponential
+from io import BytesIO
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -136,24 +137,39 @@ def get_watsonx_token(api_key: str) -> str:
         logging.error(f"Error getting WatsonX token: {e}")
         raise
 
-def encode_image_base64(image_path: str) -> str:
-    """Encode image to base64 string."""
+def encode_image_base64(image_path):
+    """Encode image to base64 string with proper format for Llama Scout."""
     try:
+        # Open and convert to RGB
         with Image.open(image_path) as img:
-            # Convert to RGB if necessary
+            # Convert to RGB if needed
             if img.mode != 'RGB':
                 img = img.convert('RGB')
             
-            # Resize image if needed
-            max_size = (800, 800)  # Reduced from 1024x1024 to 800x800
-            img.thumbnail(max_size, Image.Resampling.LANCZOS)
+            # Get original dimensions
+            logging.info(f"Original image dimensions: {img.size}")
             
-            # Save to bytes with higher quality
+            # Resize to smaller dimensions
+            new_size = (512, 512)
+            img = img.resize(new_size, Image.Resampling.LANCZOS)
+            logging.info(f"Resized image dimensions: {img.size}")
+            
+            # Save to bytes with JPEG format
             buffer = io.BytesIO()
-            img.save(buffer, format="JPEG", quality=100)  # Increased quality from 95 to 100
-            return base64.b64encode(buffer.getvalue()).decode('utf-8')
+            img.save(buffer, format="JPEG", quality=95)
+            buffer.seek(0)
+            
+            # Get buffer size
+            buffer_size = len(buffer.getvalue())
+            logging.info(f"Buffer size before base64: {buffer_size} bytes")
+            
+            # Encode to base64
+            img_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            logging.info(f"Base64 string length: {len(img_str)}")
+            
+            return img_str
     except Exception as e:
-        logging.error(f"Error encoding image: {e}")
+        logging.error(f"Error encoding image: {str(e)}")
         raise
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
@@ -165,158 +181,153 @@ def make_api_request(token: str, payload: Dict[str, Any]) -> Dict[str, Any]:
         "Authorization": f"Bearer {token}"
     }
     
-    response = requests.post(
-        f"{WATSONX_URL}/ml/v1/text/chat?version=2023-05-29",
-        headers=headers,
-        json=payload,
-        timeout=60
-    )
-    response.raise_for_status()
-    return response.json()
+    try:
+        response = requests.post(
+            f"{WATSONX_URL}/ml/v1/text/chat?version=2023-05-29",
+            headers=headers,
+            json=payload,
+            timeout=60
+        )
+        
+        if response.status_code != 200:
+            logging.error(f"API Error Response: {response.text}")
+        
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"HTTP Error: {str(e)}")
+        if hasattr(e.response, 'text'):
+            logging.error(f"Error Response: {e.response.text}")
+        raise
+    except Exception as e:
+        logging.error(f"API Request Error: {str(e)}")
+        raise
 
-def get_asl_prediction(image_path: str, strategy: str = "zero-shot") -> Dict[str, Any]:
-    """Get ASL prediction from Llama Scout 17B model with specified prompting strategy."""
+def get_asl_prediction(image_path: str, strategy: Literal["zero_shot", "few_shot", "chain_of_thought", "visual_grounding", "contrastive"] = "zero_shot") -> dict:
+    """Get ASL prediction from Llama Scout model."""
     start_time = time.time()
     
     try:
-        # Get authentication token
         token = get_watsonx_token(WATSONX_API_KEY)
-        
-        # Encode image
-        image_base64 = encode_image_base64(image_path)
-        logging.info(f"Image encoded successfully. Base64 size: {len(image_base64)} characters")
-        
-        # First, test if the model can see the image
-        visibility_test_messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": "Look at the image I provided. Can you see a hand gesture? If yes, describe what you see. If no, say 'No, I cannot see the image'."
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_base64}"
-                        }
-                    }
-                ]
+        if not token:
+            return {
+                "error": "Failed to get authentication token",
+                "metadata": {
+                    "response_time": round(time.time() - start_time, 3),
+                    "model": "llama_scout_17b",
+                    "strategy": strategy
+                }
             }
-        ]
-        
-        visibility_test_payload = {
-            "model_id": MODEL_ID,
-            "project_id": WATSONX_PROJECT_ID,
-            "messages": visibility_test_messages
-        }
-        
-        # Make the visibility test API request
-        logging.info("Testing image visibility...")
-        visibility_result = make_api_request(token, visibility_test_payload)
-        
-        # Extract the visibility response
-        visibility_text = visibility_result.get("choices", [{}])[0].get("message", {}).get("content", "")
-        logging.info(f"Visibility test response: {visibility_text}")
-        
-        if "no, i cannot see the image" in visibility_text.lower():
-            raise ValueError("Model cannot see the image")
-        
-        # If visibility test passed, proceed with the ASL sign recognition
-        logging.info("Proceeding with ASL sign recognition...")
-        
-        # Select prompt based on strategy
-        prompt_map = {
-            "zero-shot": ZERO_SHOT_PROMPT,
-            "few-shot": FEW_SHOT_PROMPT,
-            "chain-of-thought": CHAIN_OF_THOUGHT_PROMPT
-        }
-        prompt = prompt_map.get(strategy, ZERO_SHOT_PROMPT)
-        
-        # Create the message with image and prompt
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": prompt
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{image_base64}"
-                        }
-                    }
-                ]
-            }
-        ]
-        
+
+        # Process image and get data URI
+        image_data_uri = encode_image_base64(image_path)
+
+        # Get the appropriate prompt template
+        prompt_template = PROMPT_TEMPLATES.get(strategy, PROMPT_TEMPLATES["zero_shot"])
+
+        # Create the payload with the actual ASL prediction request
         payload = {
             "model_id": MODEL_ID,
             "project_id": WATSONX_PROJECT_ID,
-            "messages": messages
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "You are an expert in American Sign Language (ASL) recognition. Analyze the provided image and identify the ASL letter being signed (A-Z)."
+                },
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": prompt_template
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:image/jpeg;base64,{image_data_uri}"
+                            }
+                        }
+                    ]
+                }
+            ]
         }
         
-        # Make the API request
         result = make_api_request(token, payload)
         
         # Extract the generated text
         generated_text = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-        logging.info(f"Generated text: {generated_text}")
         
-        # Calculate response time and token estimates
-        response_time = time.time() - start_time
-        prompt_tokens = estimate_tokens(prompt)
-        response_tokens = estimate_tokens(generated_text)
-        total_tokens = prompt_tokens + response_tokens
+        # Clean the response text - remove any markdown code blocks
+        generated_text = generated_text.replace("```json", "").replace("```", "").strip()
         
-        # Try to parse the JSON response
+        # Parse the JSON response
         try:
-            # Find the JSON object in the response
-            json_start = generated_text.find('{')
-            json_end = generated_text.rfind('}') + 1
-            if json_start >= 0 and json_end > json_start:
-                json_str = generated_text[json_start:json_end]
-                prediction = json.loads(json_str)
-                
-                # Add metadata to the response
-                final_result = {
-                    "prediction": prediction,
-                    "metadata": {
-                        "model": "llama-scout-17b",
-                        "strategy": strategy,
-                        "response_time": round(response_time, 3),
-                        "tokens": {
-                            "prompt": prompt_tokens,
-                            "response": response_tokens,
-                            "total": total_tokens
-                        }
-                    }
-                }
-                return final_result
-            else:
-                raise ValueError("No JSON object found in response")
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse JSON from response: {e}")
+            prediction = json.loads(generated_text)
+            if not isinstance(prediction, dict):
+                raise ValueError("Response is not a valid JSON object")
             
+            if "letter" not in prediction:
+                raise ValueError("Response missing 'letter' field")
+
+            # Calculate response time
+            response_time = time.time() - start_time
+            
+            # Return the prediction in the format expected by evaluate_models.py
+            return {
+                "letter": prediction["letter"],
+                "confidence": prediction.get("confidence", 0.0),
+                "feedback": prediction.get("feedback", ""),
+                "metadata": {
+                    "response_time": round(response_time, 3),
+                    "model": "llama_scout_17b",
+                    "strategy": strategy
+                }
+            }
+            
+        except json.JSONDecodeError as e:
+            logging.error(f"Failed to parse JSON response: {e}")
+            logging.error(f"Raw response: {generated_text}")
+            return {
+                "error": "Invalid JSON response from model",
+                "raw_response": generated_text,
+                "metadata": {
+                    "response_time": round(time.time() - start_time, 3),
+                    "model": "llama_scout_17b",
+                    "strategy": strategy
+                }
+            }
+        except ValueError as e:
+            logging.error(f"Invalid response format: {e}")
+            return {
+                "error": str(e),
+                "metadata": {
+                    "response_time": round(time.time() - start_time, 3),
+                    "model": "llama_scout_17b",
+                    "strategy": strategy
+                }
+            }
+
     except Exception as e:
+        response_time = time.time() - start_time
         logging.error(f"Error in ASL prediction: {e}")
         return {
             "error": str(e),
             "metadata": {
-                "model": "llama-scout-17b",
-                "strategy": strategy,
-                "response_time": round(time.time() - start_time, 3)
+                "response_time": round(response_time, 3),
+                "model": "llama_scout_17b",
+                "strategy": strategy
             }
         }
+    finally:
+        # Add a delay to respect rate limits
+        time.sleep(2)
 
 def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Test Llama Scout 17B model with different prompting strategies')
     parser.add_argument('--image', type=str, help='Path to the image file')
-    parser.add_argument('--prompt-strategy', type=str, choices=['zero-shot', 'few-shot', 'chain-of-thought', 'visual-grounding', 'contrastive'],
-                      default='zero-shot', help='Prompting strategy to use')
+    parser.add_argument('--prompt-strategy', type=str, choices=['zero_shot', 'few_shot', 'chain_of_thought', 'visual_grounding', 'contrastive'],
+                      default='zero_shot', help='Prompting strategy to use')
     args = parser.parse_args()
     
     # Use provided image path or default
@@ -324,7 +335,7 @@ def main():
         image_path = args.image
     else:
         # Use a default image path
-        image_path = "/Users/henrikjacobsen/Desktop/CBS/Semester 2/Artifical Intelligence and Machine Learning/Final Project/AIML25-shared/data/V/V_17_20250428_114126.jpg"
+        image_path = "/Users/henrikjacobsen/Desktop/CBS/Semester 2/Artifical Intelligence and Machine Learning/Final Project/AIML25-shared/model_comparison/data/V/V_17_20250428_114126.jpg"
         print(f"Using default image path: {image_path}")
     
     if not os.path.exists(image_path):

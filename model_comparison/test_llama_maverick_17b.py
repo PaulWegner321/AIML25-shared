@@ -174,7 +174,7 @@ def make_api_request(token: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     response.raise_for_status()
     return response.json()
 
-def get_asl_prediction(image_path: str, strategy: str = "zero-shot") -> Dict[str, Any]:
+def get_asl_prediction(image_path: str, strategy: str = "zero_shot") -> Dict[str, Any]:
     """Get ASL prediction from Llama Maverick 17B model with specified prompting strategy."""
     start_time = time.time()
     
@@ -225,13 +225,8 @@ def get_asl_prediction(image_path: str, strategy: str = "zero-shot") -> Dict[str
         # If visibility test passed, proceed with the ASL sign recognition
         logging.info("Proceeding with ASL sign recognition...")
         
-        # Select prompt based on strategy
-        prompt_map = {
-            "zero-shot": ZERO_SHOT_PROMPT,
-            "few-shot": FEW_SHOT_PROMPT,
-            "chain-of-thought": CHAIN_OF_THOUGHT_PROMPT
-        }
-        prompt = prompt_map.get(strategy, ZERO_SHOT_PROMPT)
+        # Get appropriate prompt template
+        prompt = PROMPT_TEMPLATES.get(strategy, PROMPT_TEMPLATES["zero_shot"])
         
         # Create the message with image and prompt
         messages = [
@@ -287,27 +282,33 @@ def get_asl_prediction(image_path: str, strategy: str = "zero-shot") -> Dict[str
                         "model": "llama-maverick-17b",
                         "strategy": strategy,
                         "response_time": round(response_time, 3),
-                        "tokens": {
-                            "prompt": prompt_tokens,
-                            "response": response_tokens,
-                            "total": total_tokens
-                        }
+                        "prompt_tokens": prompt_tokens,
+                        "response_tokens": response_tokens,
+                        "total_tokens": total_tokens
                     }
                 }
                 return final_result
             else:
                 raise ValueError("No JSON object found in response")
         except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse JSON from response: {e}")
+            logging.error(f"Error parsing JSON response: {e}")
+            return {
+                "error": f"Invalid JSON response: {str(e)}",
+                "metadata": {
+                    "response_time": round(response_time, 3),
+                    "prompt_tokens": prompt_tokens,
+                    "response_tokens": response_tokens,
+                    "total_tokens": total_tokens
+                }
+            }
             
     except Exception as e:
+        response_time = time.time() - start_time
         logging.error(f"Error in ASL prediction: {e}")
         return {
             "error": str(e),
             "metadata": {
-                "model": "llama-maverick-17b",
-                "strategy": strategy,
-                "response_time": round(time.time() - start_time, 3)
+                "response_time": round(response_time, 3)
             }
         }
 
@@ -315,8 +316,8 @@ def main():
     # Set up argument parser
     parser = argparse.ArgumentParser(description='Test Llama Maverick 17B model with different prompting strategies')
     parser.add_argument('--image', type=str, help='Path to the image file')
-    parser.add_argument('--prompt-strategy', type=str, choices=['zero-shot', 'few-shot', 'chain-of-thought', 'visual-grounding', 'contrastive'],
-                      default='zero-shot', help='Prompting strategy to use')
+    parser.add_argument('--prompt-strategy', type=str, choices=['zero_shot', 'few_shot', 'chain_of_thought', 'visual_grounding', 'contrastive'],
+                      default='zero_shot', help='Prompting strategy to use')
     args = parser.parse_args()
     
     # Use provided image path or default
@@ -324,7 +325,7 @@ def main():
         image_path = args.image
     else:
         # Use a default image path
-        image_path = "/Users/henrikjacobsen/Desktop/CBS/Semester 2/Artifical Intelligence and Machine Learning/Final Project/AIML25-shared/data/V/V_17_20250428_114126.jpg"
+        image_path = "/Users/henrikjacobsen/Desktop/CBS/Semester 2/Artifical Intelligence and Machine Learning/Final Project/AIML25-shared/model_comparison/data/V/V_17_20250428_114126.jpg"
         print(f"Using default image path: {image_path}")
     
     if not os.path.exists(image_path):

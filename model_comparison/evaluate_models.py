@@ -19,6 +19,13 @@ import torch.nn.functional as F
 import numpy as np
 import sys
 import re
+from sklearn.metrics import confusion_matrix, classification_report, top_k_accuracy_score
+import matplotlib.pyplot as plt
+import seaborn as sns
+from typing import Dict, List, Tuple, Any
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # --- Import Model Predictors --- #
 try:
@@ -34,22 +41,68 @@ except ImportError as e:
     ColorASLCNN = None
 
 # Keep these imports active
+AVAILABLE_MODELS = {}
+
+try:
+    from test_gpt4_turbo import get_asl_prediction as get_gpt4_turbo_prediction
+    AVAILABLE_MODELS["gpt4_turbo"] = get_gpt4_turbo_prediction
+except ImportError as e:
+    logging.warning(f"GPT-4 Turbo model not available: {e}")
+
+try:
+    from test_gpt4o import get_asl_prediction as get_gpt4o_prediction
+    AVAILABLE_MODELS["gpt4o"] = get_gpt4o_prediction
+except ImportError as e:
+    logging.warning(f"GPT-4 Vision model not available: {e}")
+
 try:
     from test_gemini_2_flash import get_asl_prediction as get_gemini_flash_prediction
-    from test_gemini_2_flash_lite import get_asl_prediction as get_gemini_flash_lite_prediction
-    from test_gemini_1_5_pro import get_asl_prediction as get_gemini_pro_prediction
-    from test_llama_90b_vision import get_asl_prediction as get_llama_90b_prediction
-    from test_llama_maverick_17b import get_asl_prediction as get_llama_maverick_prediction
-    from test_llama_scout_17b import get_asl_prediction as get_llama_scout_prediction
-    from test_pixtral_12b import get_asl_prediction as get_mistral_prediction
-    from test_gpt4_turbo import get_asl_prediction as get_gpt4_turbo_prediction
-    from test_gpt4o import get_asl_prediction as get_gpt4o_prediction
-    from test_granite_vision import get_asl_prediction as get_granite_vision_prediction
-    MODELS_AVAILABLE = True
+    AVAILABLE_MODELS["gemini_flash"] = get_gemini_flash_prediction
 except ImportError as e:
-    logging.error(f"Failed to import predictor from test script: {e}")
-    MODELS_AVAILABLE = False
-    # Handle missing predictor functions if necessary
+    logging.warning(f"Gemini Flash model not available: {e}")
+
+try:
+    from test_gemini_2_flash_lite import get_asl_prediction as get_gemini_flash_lite_prediction
+    AVAILABLE_MODELS["gemini_flash_lite"] = get_gemini_flash_lite_prediction
+except ImportError as e:
+    logging.warning(f"Gemini Flash Lite model not available: {e}")
+
+try:
+    from test_llama_90b_vision import get_asl_prediction as get_llama_90b_prediction
+    AVAILABLE_MODELS["llama_90b"] = get_llama_90b_prediction
+except ImportError as e:
+    logging.warning(f"Llama 90B Vision model not available: {e}")
+
+try:
+    from test_llama_maverick_17b import get_asl_prediction as get_llama_maverick_prediction
+    AVAILABLE_MODELS["llama_maverick"] = get_llama_maverick_prediction
+except ImportError as e:
+    logging.warning(f"Llama Maverick model not available: {e}")
+
+try:
+    from test_llama_scout_17b import get_asl_prediction as get_llama_scout_prediction
+    AVAILABLE_MODELS["llama_scout"] = get_llama_scout_prediction
+except ImportError as e:
+    logging.warning(f"Llama Scout model not available: {e}")
+
+try:
+    from test_pixtral_12b import get_asl_prediction as get_mistral_prediction
+    AVAILABLE_MODELS["mistral"] = get_mistral_prediction
+except ImportError as e:
+    logging.warning(f"Mistral (Pixtral) model not available: {e}")
+
+try:
+    from test_granite_vision import get_asl_prediction as get_granite_vision_prediction
+    AVAILABLE_MODELS["granite_vision"] = get_granite_vision_prediction
+except ImportError as e:
+    logging.warning(f"Granite Vision model not available: {e}")
+
+# Define models to evaluate based on availability
+MODELS_TO_EVALUATE = list(AVAILABLE_MODELS.keys())
+logging.info(f"Available models: {MODELS_TO_EVALUATE}")
+
+if not MODELS_TO_EVALUATE:
+    logging.warning("No models available for evaluation. Please check your environment variables and dependencies.")
 
 # Load environment variables from backend/.env
 dotenv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend', '.env')
@@ -64,333 +117,149 @@ for key in os.environ:
     else:
         logging.info(f"  {key} = [REDACTED]")
 
-# --- Configuration & Setup ---
-def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Evaluate multiple ASL recognition models')
-    parser.add_argument('--dataset_path', type=str, default='/Users/henrikjacobsen/Desktop/CBS/Semester 2/Artifical Intelligence and Machine Learning/Final Project/AIML25-shared/model_comparison/data',
-                       help='Path to the dataset directory (default: project data directory)')
-    parser.add_argument('--sample_size', type=int, default=1,
-                       help='Number of images to sample from each letter')
-    parser.add_argument('--output_dir', type=str, default='evaluation_results',
-                       help='Directory to save evaluation results')
-    args = parser.parse_args()
+# Define valid classes and class mapping
+VALID_CLASSES = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")  # All ASL letters
+CLASS_MAP = {label: i for i, label in enumerate(VALID_CLASSES)}
+INDEX_TO_CLASS = {i: label for label, i in CLASS_MAP.items()}
 
-    # Ensure output directory exists
-    os.makedirs(args.output_dir, exist_ok=True)
+# Define available prompt strategies
+PROMPT_STRATEGIES = [
+    "zero_shot"  # Only test with zero-shot for now
+]
 
-    # Load dataset
-    dataset_path = args.dataset_path
-    logging.info(f"Loading dataset from: {dataset_path}")
-    if not os.path.exists(dataset_path) or not os.path.isdir(dataset_path):
-        logging.error(f"Dataset path not found or not a directory: {dataset_path}")
-        exit(1)
+# Define the transform for preprocessing images (used by CNN)
+cnn_transform = transforms.Compose([
+    transforms.Resize((64, 64)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+])
 
-    # Get all image files
-    image_files = []
-    for root, _, files in os.walk(dataset_path):
-        for file in files:
-            if file.lower().endswith(('.png', '.jpg', '.jpeg')):
-                image_files.append(os.path.join(root, file))
+# --- Helper Functions ---
+def get_watsonx_token(api_key):
+    """Gets or refreshes the IBM Cloud IAM token."""
+    global watsonx_token, watsonx_token_expiry
+    now = time.time()
 
-    if not image_files:
-        logging.error("No images found in dataset directory")
-        exit(1)
+    if watsonx_token and watsonx_token_expiry and now < watsonx_token_expiry:
+        return watsonx_token
 
-    # Group images by letter
-    images_by_letter = {}
-    for image_path in image_files:
-        letter = os.path.basename(os.path.dirname(image_path))
-        if letter not in images_by_letter:
-            images_by_letter[letter] = []
-        images_by_letter[letter].append(image_path)
+    logging.info("Refreshing WatsonX authentication token...")
+    auth_url = "https://iam.cloud.ibm.com/identity/token"
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    data = {"grant_type": "urn:ibm:params:oauth:grant-type:apikey", "apikey": api_key}
+    try:
+        response = requests.post(auth_url, headers=headers, data=data, timeout=15)
+        response.raise_for_status()
+        token_data = response.json()
+        watsonx_token = token_data.get("access_token")
+        expires_in = token_data.get("expires_in", 3600)
+        watsonx_token_expiry = now + expires_in - 300  # 5 min buffer
+        return watsonx_token
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Authentication failed: {e}")
+        return None
+    except Exception as e:
+        logging.error(f"Error refreshing token: {e}")
+        return None
 
-    # Sample images
-    sampled_images = []
-    for letter, images in images_by_letter.items():
-        if len(images) > args.sample_size:
-            sampled_images.extend([(img, letter) for img in random.sample(images, args.sample_size)])
-        else:
-            sampled_images.extend([(img, letter) for img in images])
+def encode_image_base64(image_path, resize_dim=(256, 256)):
+    """Reads, resizes, and returns the base64 encoded string of an image."""
+    try:
+        with Image.open(image_path) as img:
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
 
-    if not sampled_images:
-        logging.error("No images loaded for evaluation")
-        exit(1)
+            if resize_dim:
+                img = img.resize(resize_dim)
 
-    logging.info(f"Loaded {len(sampled_images)} images for evaluation")
+            buffer = io.BytesIO()
+            img.save(buffer, format="JPEG", quality=95)
+            base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
+            base64_str = ''.join(base64_str.split())
+            return base64_str
+    except Exception as e:
+        logging.error(f"Error encoding/resizing image {image_path}: {e}")
+        traceback.print_exc()
+        return None
 
-    # For testing, only use one letter
-    VALID_CLASSES = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")  # All ASL letters
-    CLASS_MAP = {label: i for i, label in enumerate(VALID_CLASSES)}
-    INDEX_TO_CLASS = {i: label for label, i in CLASS_MAP.items()}
+def load_dataset_sample(dataset_path_str, sample_size=1):
+    """Load a single specific image for testing."""
+    test_image = "/Users/henrikjacobsen/Desktop/CBS/Semester 2/Artifical Intelligence and Machine Learning/Final Project/AIML25-shared/model_comparison/data/V/V_0_20250428_114109_flipped.jpg"
+    true_letter = "V"  # The letter V is the true label for this image
+    
+    logging.info(f"Using single test image: {test_image} (true letter: {true_letter})")
+    return [(test_image, true_letter)]
 
-    # Define models to evaluate based on availability
-    MODELS_TO_EVALUATE = []
-    if MODELS_AVAILABLE:
-        MODELS_TO_EVALUATE.extend([
-            "gpt4_turbo",
-            "gpt4o",
-            "gemini_flash",
-            "gemini_flash_lite",
-            "gemini_pro",
-            "llama_90b",
-            "llama_maverick",
-            "llama_scout",
-            "mistral",
-            "granite_vision"
-        ])
-
-    # Define available prompt strategies
-    PROMPT_STRATEGIES = [
-        "zero_shot"  # Only test with zero-shot for now
-    ]
-
-    # Global variables for tracking results
-    results = {model: {
-        "correct": 0, 
-        "total": 0, 
-        "errors": 0, 
-        "visibility_failed": 0, 
-        "rate_limit_errors": 0,
-        "response_times": [],
-        "token_usage": [],
-        "prompt_strategy_results": {strategy: {
-            "correct": 0,
-            "total": 0,
-            "response_times": [],
-            "token_usage": []
-        } for strategy in PROMPT_STRATEGIES}
-    } for model in MODELS_TO_EVALUATE}
-    misclassified = {model: {} for model in MODELS_TO_EVALUATE}
-
-    # Initialize misclassified dictionary for each model and letter
-    for model in misclassified:
-        for letter in VALID_CLASSES:
-            misclassified[model][letter] = []
-
-    # Define the transform for preprocessing images (used by CNN)
-    cnn_transform = transforms.Compose([
-        transforms.Resize((64, 64)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-    ])
-
-    # --- Helper Functions ---
-
-    def get_watsonx_token(api_key):
-        """Gets or refreshes the IBM Cloud IAM token."""
-        global watsonx_token, watsonx_token_expiry
-        now = time.time()
-
-        if watsonx_token and watsonx_token_expiry and now < watsonx_token_expiry:
-            # --- Log Token Snippet --- #
-            token_snippet = f"{watsonx_token[:5]}...{watsonx_token[-5:]}" if watsonx_token else "None"
-            logging.debug(f"Using existing token: {token_snippet}")
-            # --- End Log Token Snippet --- #
-            return watsonx_token
-
-        logging.info("Refreshing WatsonX authentication token...")
-        auth_url = "https://iam.cloud.ibm.com/identity/token"
-        headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        data = {"grant_type": "urn:ibm:params:oauth:grant-type:apikey", "apikey": api_key}
-        try:
-            response = requests.post(auth_url, headers=headers, data=data, timeout=15)
-            response.raise_for_status() # Raise error for bad status codes
-            token_data = response.json()
-            watsonx_token = token_data.get("access_token")
-            expires_in = token_data.get("expires_in", 3600)
-            watsonx_token_expiry = now + expires_in - 300 # 5 min buffer
-            # --- Log Token Snippet --- #
-            token_snippet = f"{watsonx_token[:5]}...{watsonx_token[-5:]}" if watsonx_token else "None"
-            logging.info(f"WatsonX token refreshed. New token: {token_snippet}")
-            # --- End Log Token Snippet --- #
-            return watsonx_token
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Authentication failed: {e}")
-            return None
-        except Exception as e:
-            logging.error(f"Error refreshing token: {e}")
-            return None
-
-    def encode_image_base64(image_path, resize_dim=(256, 256)):
-        """Reads, resizes, and returns the base64 encoded string of an image."""
-        try:
-            with Image.open(image_path) as img:
-                if img.mode != 'RGB':
-                    img = img.convert('RGB')
-
-                if resize_dim:
-                    logging.debug(f"Resizing image {Path(image_path).name} to {resize_dim}")
-                    img = img.resize(resize_dim)
-
-                buffer = io.BytesIO()
-                img.save(buffer, format="JPEG", quality=95)
-                base64_str = base64.b64encode(buffer.getvalue()).decode('utf-8')
-                base64_str = ''.join(base64_str.split())
-                
-                logging.debug(f"Base64 image string (first 20 chars): {base64_str[:20]}...")
-                return base64_str
-        except Exception as e:
-            logging.error(f"Error encoding/resizing image {image_path}: {e}")
-            traceback.print_exc()
-            return None
-
-    def load_dataset_sample(dataset_path_str, sample_size=1):
-        """Load sample_size random images from each letter in the dataset."""
-        dataset_path = Path(dataset_path_str)
-        if not dataset_path.exists():
-            raise ValueError(f"Dataset path {dataset_path} does not exist")
-        
-        sampled_images = []
-        for letter_dir in dataset_path.iterdir():
-            if letter_dir.is_dir():
-                letter = letter_dir.name
-                # Only process directories that are single letters (A-Z)
-                if len(letter) == 1 and letter.isalpha():
-                    images = list(letter_dir.glob("*.jpg"))
-                    if images:
-                        # Sample min(sample_size, available_images) images from this letter
-                        num_samples = min(sample_size, len(images))
-                        selected_images = random.sample(images, num_samples)
-                        sampled_images.extend([(str(img_path), letter) for img_path in selected_images])
-        
-        if not sampled_images:
-            raise ValueError("No images found in dataset")
-        
-        logging.info(f"Sampled {len(sampled_images)} images total ({sample_size} per letter)")
-        return sampled_images
-
-    def get_prediction(model_name, image_path, prompt_strategy="zero_shot"):
-        """Get prediction from the specified model."""
-        start_time = time.time()
-        try:
-            if model_name == "gpt4_turbo":
-                result = get_gpt4_turbo_prediction(image_path, prompt_strategy=prompt_strategy)
-            elif model_name == "gpt4o":
-                result = get_gpt4o_prediction(image_path, prompt_strategy=prompt_strategy)
-            elif model_name == "gemini_flash":
-                result = get_gemini_flash_prediction(image_path, model_type="flash", prompt_strategy=prompt_strategy)
-            elif model_name == "gemini_flash_lite":
-                result = get_gemini_flash_lite_prediction(image_path, prompt_strategy=prompt_strategy)
-            elif model_name == "gemini_pro":
-                result = get_gemini_pro_prediction(image_path, prompt_strategy=prompt_strategy)
-            elif model_name == "llama_90b":
-                result = get_llama_90b_prediction(image_path, strategy=prompt_strategy)
-            elif model_name == "llama_maverick":
-                result = get_llama_maverick_prediction(image_path, strategy=prompt_strategy)
-            elif model_name == "llama_scout":
-                result = get_llama_scout_prediction(image_path, strategy=prompt_strategy)
-            elif model_name == "mistral":
-                result = get_mistral_prediction(image_path, strategy=prompt_strategy)
-            elif model_name == "granite_vision":
-                result = get_granite_vision_prediction(image_path, prompt_strategy=prompt_strategy)
-            else:
-                raise ValueError(f"Unknown model: {model_name}")
+def get_prediction(model_name, image_path, prompt_strategy="zero_shot"):
+    """Get prediction from the specified model."""
+    start_time = time.time()
+    try:
+        if model_name not in AVAILABLE_MODELS:
+            raise ValueError(f"Model {model_name} is not available")
             
-            response_time = time.time() - start_time
+        # Get the prediction function for this model
+        predict_func = AVAILABLE_MODELS[model_name]
+        
+        # Handle different parameter naming conventions
+        if model_name in ["gemini_flash", "gemini_flash_lite", "granite_vision"]:
+            result = predict_func(image_path, prompt_strategy=prompt_strategy)
+        elif model_name in ["llama_90b", "llama_maverick", "llama_scout", "mistral"]:
+            result = predict_func(image_path, strategy=prompt_strategy)
+        else:  # GPT-4 models
+            result = predict_func(image_path, prompt_strategy=prompt_strategy)
+        
+        response_time = time.time() - start_time
+        
+        # Extract token usage if available
+        token_usage = 0
+        if isinstance(result, dict):
+            if "metadata" in result:
+                if "total_tokens" in result["metadata"]:
+                    token_usage = result["metadata"]["total_tokens"]
+                elif "tokens" in result["metadata"] and "total" in result["metadata"]["tokens"]:
+                    token_usage = result["metadata"]["tokens"]["total"]
             
-            # Extract token usage if available
-            token_usage = 0
-            if isinstance(result, dict):
-                if "metadata" in result:
-                    if "total_tokens" in result["metadata"]:
-                        token_usage = result["metadata"]["total_tokens"]
-                    elif "tokens" in result["metadata"] and "total" in result["metadata"]["tokens"]:
-                        token_usage = result["metadata"]["tokens"]["total"]
-                
-                # If the result has a "prediction" key, use that as the actual result
-                if "prediction" in result:
-                    result = result["prediction"]
-            
-            return result, response_time, token_usage
-        except Exception as e:
-            logging.error(f"Error getting prediction from {model_name} for {image_path}: {e}")
-            return {"error": str(e)}, time.time() - start_time, 0
+            # If the result has a "prediction" key, use that as the actual result
+            if "prediction" in result:
+                result = result["prediction"]
+        
+        return result, response_time, token_usage
+    except Exception as e:
+        logging.error(f"Error getting prediction from {model_name}: {str(e)}")
+        response_time = time.time() - start_time
+        return {"error": str(e)}, response_time, 0
 
-    def handle_result(model_name, prediction_result, true_letter, image_path, response_time=None, token_usage=None, prompt_strategy="zero_shot"):
-        """Handle and process model prediction results."""
-        try:
-            # Handle string responses
-            if isinstance(prediction_result, str):
-                # Clean the response string
-                raw = prediction_result.replace("```json", "").replace("```", "").strip()
-                try:
-                    prediction_result = json.loads(raw)
-                except json.JSONDecodeError:
-                    # Try to extract JSON-like content
-                    json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-                    if json_match:
-                        prediction_result = json.loads(json_match.group())
-                    else:
-                        return {
-                            "model": model_name,
-                            "error": "Invalid JSON response",
-                            "raw_response": prediction_result,
-                            "metadata": {
-                                "response_time_seconds": response_time,
-                                "token_usage": token_usage,
-                                "prompt_strategy": prompt_strategy
-                            }
+def handle_result(model_name, prediction_result, true_letter, image_path, response_time=None, token_usage=None, prompt_strategy="zero_shot"):
+    """Handle and process model prediction results."""
+    try:
+        # Handle string responses
+        if isinstance(prediction_result, str):
+            # Clean the response string
+            raw = prediction_result.replace("```json", "").replace("```", "").strip()
+            try:
+                prediction_result = json.loads(raw)
+            except json.JSONDecodeError:
+                # Try to extract JSON-like content
+                json_match = re.search(r'\{.*\}', raw, re.DOTALL)
+                if json_match:
+                    prediction_result = json.loads(json_match.group())
+                else:
+                    return {
+                        "model": model_name,
+                        "error": "Invalid JSON response",
+                        "raw_response": prediction_result,
+                        "metadata": {
+                            "response_time_seconds": response_time,
+                            "token_usage": token_usage,
+                            "prompt_strategy": prompt_strategy
                         }
-
-            # Handle error responses
-            if isinstance(prediction_result, dict) and "error" in prediction_result:
-                return {
-                    "model": model_name,
-                    "error": prediction_result["error"],
-                    "metadata": {
-                        "response_time_seconds": response_time,
-                        "token_usage": token_usage,
-                        "prompt_strategy": prompt_strategy
                     }
-                }
 
-            # Extract prediction and confidence
-            prediction = prediction_result.get("letter", "").upper()
-            confidence = prediction_result.get("confidence", 0)
-            
-            # Convert confidence to float if it's a string
-            if isinstance(confidence, str):
-                try:
-                    confidence = float(confidence)
-                except ValueError:
-                    confidence = 0
-
-            # Validate prediction
-            if not prediction or prediction not in VALID_CLASSES:
-                return {
-                    "model": model_name,
-                    "error": f"Invalid prediction: {prediction}",
-                    "metadata": {
-                        "response_time_seconds": response_time,
-                        "token_usage": token_usage,
-                        "prompt_strategy": prompt_strategy
-                    }
-                }
-
-            # Calculate accuracy
-            is_correct = prediction == true_letter.upper()
-            
+        # Handle error responses
+        if isinstance(prediction_result, dict) and "error" in prediction_result:
             return {
                 "model": model_name,
-                "prediction": prediction,
-                "true_letter": true_letter.upper(),
-                "is_correct": is_correct,
-                "confidence": confidence,
-                "feedback": prediction_result.get("feedback", ""),
-                "metadata": {
-                    "response_time_seconds": response_time,
-                    "token_usage": token_usage,
-                    "prompt_strategy": prompt_strategy,
-                    "image_path": str(image_path)
-                }
-            }
-
-        except Exception as e:
-            return {
-                "model": model_name,
-                "error": f"Error processing result: {str(e)}",
-                "raw_response": str(prediction_result),
+                "error": prediction_result["error"],
                 "metadata": {
                     "response_time_seconds": response_time,
                     "token_usage": token_usage,
@@ -398,15 +267,69 @@ def main():
                 }
             }
 
-    def calculate_statistics(results, misclassified):
-        """Calculate statistics for each model."""
-        stats = {}
-        for model_name, model_results in results.items():
-            total = model_results["total"]
-            correct = model_results["correct"]
-            errors = model_results["errors"]
-            visibility_failed = model_results["visibility_failed"]
-            rate_limit_errors = model_results["rate_limit_errors"]
+        # Extract prediction and confidence
+        prediction = prediction_result.get("letter", "").upper()
+        confidence = prediction_result.get("confidence", 0)
+        
+        # Convert confidence to float if it's a string
+        if isinstance(confidence, str):
+            try:
+                confidence = float(confidence)
+            except ValueError:
+                confidence = 0
+
+        # Validate prediction
+        if not prediction or prediction not in VALID_CLASSES:
+            return {
+                "model": model_name,
+                "error": f"Invalid prediction: {prediction}",
+                "metadata": {
+                    "response_time_seconds": response_time,
+                    "token_usage": token_usage,
+                    "prompt_strategy": prompt_strategy
+                }
+            }
+
+        # Calculate accuracy
+        is_correct = prediction == true_letter.upper()
+        
+        return {
+            "model": model_name,
+            "prediction": prediction,
+            "true_letter": true_letter.upper(),
+            "is_correct": is_correct,
+            "confidence": confidence,
+            "feedback": prediction_result.get("feedback", ""),
+            "metadata": {
+                "response_time_seconds": response_time,
+                "token_usage": token_usage,
+                "prompt_strategy": prompt_strategy,
+                "image_path": str(image_path)
+            }
+        }
+
+    except Exception as e:
+        return {
+            "model": model_name,
+            "error": f"Error processing result: {str(e)}",
+            "raw_response": str(prediction_result),
+            "metadata": {
+                "response_time_seconds": response_time,
+                "token_usage": token_usage,
+                "prompt_strategy": prompt_strategy
+            }
+        }
+
+def calculate_statistics(results: Dict[str, Any], misclassified: Dict[str, List[Tuple[str, str]]]) -> Dict[str, Any]:
+    """Calculate statistics for each model."""
+    stats = {}
+    for model_name, model_results in results.items():
+        if isinstance(model_results, dict):
+            total = model_results.get("total", 0)
+            correct = model_results.get("correct", 0)
+            errors = model_results.get("errors", 0)
+            visibility_failed = model_results.get("visibility_failed", 0)
+            rate_limit_errors = model_results.get("rate_limit_errors", 0)
             
             # Calculate rates (handle division by zero)
             accuracy = correct / total if total > 0 else 0
@@ -415,22 +338,22 @@ def main():
             rate_limit_error_rate = rate_limit_errors / total if total > 0 else 0
             
             # Calculate response time statistics
-            response_times = model_results["response_times"]
+            response_times = model_results.get("response_times", [])
             avg_response_time = sum(response_times) / len(response_times) if response_times else 0
             std_response_time = (sum((x - avg_response_time) ** 2 for x in response_times) / len(response_times)) ** 0.5 if response_times else 0
             
             # Calculate token usage statistics
-            token_usage = model_results["token_usage"]
+            token_usage = model_results.get("token_usage", [])
             avg_token_usage = sum(token_usage) / len(token_usage) if token_usage else 0
             std_token_usage = (sum((x - avg_token_usage) ** 2 for x in token_usage) / len(token_usage)) ** 0.5 if token_usage else 0
             
             # Calculate prompt strategy results
             prompt_strategy_results = {}
-            for strategy, strategy_results in model_results["prompt_strategy_results"].items():
-                strategy_total = strategy_results["total"]
-                strategy_correct = strategy_results["correct"]
-                strategy_response_times = strategy_results["response_times"]
-                strategy_token_usage = strategy_results["token_usage"]
+            for strategy, strategy_results in model_results.get("prompt_strategy_results", {}).items():
+                strategy_total = strategy_results.get("total", 0)
+                strategy_correct = strategy_results.get("correct", 0)
+                strategy_response_times = strategy_results.get("response_times", [])
+                strategy_token_usage = strategy_results.get("token_usage", [])
                 
                 strategy_accuracy = strategy_correct / strategy_total if strategy_total > 0 else 0
                 strategy_avg_response_time = sum(strategy_response_times) / len(strategy_response_times) if strategy_response_times else 0
@@ -453,110 +376,269 @@ def main():
                 "std_token_usage": std_token_usage,
                 "prompt_strategy_results": prompt_strategy_results
             }
-        
-        return stats
+    
+    return stats
 
-    def evaluate_models(dataset_path, sample_size=1, output_dir="evaluation_results"):
-        """Evaluate all models on the dataset."""
-        timestamp = time.strftime("%Y%m%d_%H%M%S")
-        output_file = os.path.join(output_dir, f"evaluation_results_{timestamp}.json")
-        
-        # Load and sample images
-        sampled_images = load_dataset_sample(dataset_path, sample_size)
-        logging.info(f"Evaluating {len(sampled_images)} images across all models")
-        
-        # Initialize results tracking
-        results = {model: {
+def calculate_metrics(predictions: List[str], ground_truth: List[str], prediction_probs: np.ndarray = None) -> Dict[str, Any]:
+    """Calculate comprehensive evaluation metrics."""
+    metrics = {}
+    
+    # Convert to numpy arrays for easier calculations
+    preds = np.array(predictions)
+    truth = np.array(ground_truth)
+    
+    # 1. Basic Accuracy
+    metrics["accuracy"] = np.mean(preds == truth)
+    
+    # 2. Top-k Accuracy (if prediction probabilities are available)
+    if prediction_probs is not None:
+        for k in [2, 3, 5]:
+            metrics[f"top_{k}_accuracy"] = top_k_accuracy_score(truth, prediction_probs, k=k)
+    
+    # 3. Confusion Matrix
+    cm = confusion_matrix(truth, preds, labels=VALID_CLASSES)
+    metrics["confusion_matrix"] = cm.tolist()
+    
+    # 4. Classification Report
+    report = classification_report(truth, preds, labels=VALID_CLASSES, output_dict=True)
+    metrics["classification_report"] = report
+    
+    # 5. Macro and Micro Averages
+    metrics["macro_avg"] = {
+        "precision": report["macro avg"]["precision"],
+        "recall": report["macro avg"]["recall"],
+        "f1_score": report["macro avg"]["f1-score"]
+    }
+    
+    metrics["micro_avg"] = {
+        "precision": report["weighted avg"]["precision"],
+        "recall": report["weighted avg"]["recall"],
+        "f1_score": report["weighted avg"]["f1-score"]
+    }
+    
+    return metrics
+
+def plot_confusion_matrix(cm: np.ndarray, model_name: str, output_dir: str) -> str:
+    """Plot and save confusion matrix as a heatmap."""
+    plt.figure(figsize=(12, 10))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues',
+                xticklabels=VALID_CLASSES,
+                yticklabels=VALID_CLASSES)
+    plt.title(f'Confusion Matrix - {model_name}')
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    
+    # Save the plot
+    plot_path = os.path.join(output_dir, f'confusion_matrix_{model_name}.png')
+    plt.savefig(plot_path)
+    plt.close()
+    
+    return plot_path
+
+def evaluate_subset(predictions: List[str], ground_truth: List[str], image_paths: List[str], subset_type: str) -> Dict[str, Any]:
+    """Evaluate model performance on a specific subset of images."""
+    subset_indices = []
+    for i, path in enumerate(image_paths):
+        if subset_type == 'grayscale' and 'grayscale' in path.lower():
+            subset_indices.append(i)
+        elif subset_type == 'flipped' and 'flipped' in path.lower():
+            subset_indices.append(i)
+    
+    if not subset_indices:
+        return {
+            "count": 0,
+            "accuracy": None,
+            "error_rate": None
+        }
+    
+    # Only include indices that have corresponding predictions
+    valid_indices = [i for i in subset_indices if i < len(predictions)]
+    
+    if not valid_indices:
+        return {
+            "count": 0,
+            "accuracy": None,
+            "error_rate": None
+        }
+    
+    subset_preds = [predictions[i] for i in valid_indices]
+    subset_truth = [ground_truth[i] for i in valid_indices]
+    
+    accuracy = np.mean(np.array(subset_preds) == np.array(subset_truth))
+    error_rate = 1 - accuracy
+    
+    return {
+        "count": len(valid_indices),
+        "accuracy": accuracy,
+        "error_rate": error_rate
+    }
+
+def evaluate_models(dataset_path: str, sample_size: int = 1, output_dir: str = "evaluation_results") -> Dict[str, Any]:
+    """Evaluate all models on the dataset with comprehensive metrics."""
+    timestamp = time.strftime("%Y%m%d_%H%M%S")
+    output_file = os.path.join(output_dir, f"evaluation_results_{timestamp}.json")
+    
+    # Load and sample images
+    sampled_images = load_dataset_sample(dataset_path, sample_size)
+    logging.info(f"Evaluating {len(sampled_images)} images across all models")
+    
+    # Initialize results tracking
+    results = {model: {
+        "correct": 0,
+        "total": 0,
+        "errors": 0,
+        "visibility_failed": 0,
+        "rate_limit_errors": 0,
+        "response_times": [],
+        "token_usage": [],
+        "predictions": [],
+        "ground_truth": [],
+        "image_paths": [],
+        "prompt_strategy_results": {strategy: {
             "correct": 0,
             "total": 0,
-            "errors": 0,
-            "visibility_failed": 0,
-            "rate_limit_errors": 0,
             "response_times": [],
             "token_usage": [],
-            "prompt_strategy_results": {strategy: {
-                "correct": 0,
-                "total": 0,
-                "response_times": [],
-                "token_usage": []
-            } for strategy in PROMPT_STRATEGIES}
-        } for model in MODELS_TO_EVALUATE}
+            "predictions": [],
+            "ground_truth": []
+        } for strategy in PROMPT_STRATEGIES}
+    } for model in MODELS_TO_EVALUATE}
+    
+    misclassified = {model: {letter: [] for letter in VALID_CLASSES} for model in MODELS_TO_EVALUATE}
+    
+    # Evaluate each image with each model
+    for image_path, true_letter in sampled_images:
+        logging.info(f"\nEvaluating image: {image_path} (true letter: {true_letter})")
         
-        misclassified = {model: {letter: [] for letter in VALID_CLASSES} for model in MODELS_TO_EVALUATE}
-        
-        # Evaluate each image with each model
-        for image_path, true_letter in sampled_images:
-            logging.info(f"\nEvaluating image: {image_path} (true letter: {true_letter})")
-            
-            for model_name in MODELS_TO_EVALUATE:
-                logging.info(f"\nTesting model: {model_name}")
-                for prompt_strategy in PROMPT_STRATEGIES:
-                    try:
-                        prediction_result, response_time, token_usage = get_prediction(model_name, image_path, prompt_strategy)
-                        result = handle_result(
-                            model_name,
-                            prediction_result,
-                            true_letter,
-                            image_path,
-                            response_time=response_time,
-                            token_usage=token_usage,
-                            prompt_strategy=prompt_strategy
-                        )
-                        
-                        # Update results
-                        results[model_name]["total"] += 1
-                        results[model_name]["response_times"].append(response_time)
-                        results[model_name]["token_usage"].append(token_usage)
-                        
-                        results[model_name]["prompt_strategy_results"][prompt_strategy]["total"] += 1
-                        results[model_name]["prompt_strategy_results"][prompt_strategy]["response_times"].append(response_time)
-                        results[model_name]["prompt_strategy_results"][prompt_strategy]["token_usage"].append(token_usage)
-                        
-                        if "error" in result:
-                            logging.error(f"Error for {model_name}: {result['error']}")
-                            results[model_name]["errors"] += 1
-                            if "cannot see the image" in result["error"].lower():
-                                results[model_name]["visibility_failed"] += 1
-                            elif "rate limit" in result["error"].lower():
-                                results[model_name]["rate_limit_errors"] += 1
-                        else:
-                            if result["is_correct"]:
-                                results[model_name]["correct"] += 1
-                                results[model_name]["prompt_strategy_results"][prompt_strategy]["correct"] += 1
-                                logging.info(f"Correct prediction for {model_name}: {result['prediction']}")
-                            else:
-                                misclassified[model_name][true_letter].append((image_path, result["prediction"]))
-                                logging.info(f"Misclassification for {model_name}: predicted {result['prediction']}, actual {true_letter}")
+        for model_name in MODELS_TO_EVALUATE:
+            logging.info(f"\nTesting model: {model_name}")
+            for prompt_strategy in PROMPT_STRATEGIES:
+                try:
+                    prediction_result, response_time, token_usage = get_prediction(model_name, image_path, prompt_strategy)
+                    result = handle_result(
+                        model_name,
+                        prediction_result,
+                        true_letter,
+                        image_path,
+                        response_time=response_time,
+                        token_usage=token_usage,
+                        prompt_strategy=prompt_strategy
+                    )
                     
-                    except Exception as e:
-                        logging.error(f"Error evaluating {model_name} on {image_path}: {str(e)}")
+                    # Update results
+                    results[model_name]["total"] += 1
+                    results[model_name]["response_times"].append(response_time)
+                    results[model_name]["token_usage"].append(token_usage)
+                    results[model_name]["image_paths"].append(image_path)
+                    
+                    results[model_name]["prompt_strategy_results"][prompt_strategy]["total"] += 1
+                    results[model_name]["prompt_strategy_results"][prompt_strategy]["response_times"].append(response_time)
+                    results[model_name]["prompt_strategy_results"][prompt_strategy]["token_usage"].append(token_usage)
+                    
+                    if "error" in result:
+                        logging.error(f"Error for {model_name}: {result['error']}")
                         results[model_name]["errors"] += 1
-                        results[model_name]["total"] += 1
-        
-        # Calculate statistics
-        statistics = calculate_statistics(results, misclassified)
-        
-        # Save results
-        evaluation_results = {
-            "timestamp": timestamp,
-            "dataset_path": dataset_path,
-            "sample_size": sample_size,
-            "results": results,
-            "misclassified": misclassified,
-            "statistics": statistics
-        }
-        
-        with open(output_file, 'w') as f:
-            json.dump(evaluation_results, f, indent=2)
-        
-        logging.info(f"\nEvaluation results saved to: {output_file}")
-        return evaluation_results
+                        if "cannot see the image" in result["error"].lower():
+                            results[model_name]["visibility_failed"] += 1
+                        elif "rate limit" in result["error"].lower():
+                            results[model_name]["rate_limit_errors"] += 1
+                    else:
+                        results[model_name]["predictions"].append(result["prediction"])
+                        results[model_name]["ground_truth"].append(result["true_letter"])
+                        results[model_name]["prompt_strategy_results"][prompt_strategy]["predictions"].append(result["prediction"])
+                        results[model_name]["prompt_strategy_results"][prompt_strategy]["ground_truth"].append(result["true_letter"])
+                        
+                        if result["is_correct"]:
+                            results[model_name]["correct"] += 1
+                            results[model_name]["prompt_strategy_results"][prompt_strategy]["correct"] += 1
+                            logging.info(f"Correct prediction for {model_name}: {result['prediction']}")
+                        else:
+                            misclassified[model_name][true_letter].append((image_path, result["prediction"]))
+                            logging.info(f"Misclassification for {model_name}: predicted {result['prediction']}, actual {true_letter}")
+                except Exception as e:
+                    logging.error(f"Error evaluating {model_name} on {image_path}: {str(e)}")
+                    results[model_name]["errors"] += 1
+                    results[model_name]["total"] += 1
+    
+    # Calculate comprehensive metrics for each model
+    for model_name in MODELS_TO_EVALUATE:
+        if results[model_name]["predictions"]:
+            # Calculate basic statistics
+            stats = calculate_statistics(results[model_name], misclassified[model_name])
+            
+            # Calculate comprehensive metrics
+            metrics = calculate_metrics(
+                results[model_name]["predictions"],
+                results[model_name]["ground_truth"]
+            )
+            
+            # Calculate subset accuracies
+            subset_metrics = {
+                "grayscale": evaluate_subset(
+                    results[model_name]["predictions"],
+                    results[model_name]["ground_truth"],
+                    results[model_name]["image_paths"],
+                    "grayscale"
+                ),
+                "flipped": evaluate_subset(
+                    results[model_name]["predictions"],
+                    results[model_name]["ground_truth"],
+                    results[model_name]["image_paths"],
+                    "flipped"
+                )
+            }
+            
+            # Calculate tokens per second
+            avg_response_time = np.mean(results[model_name]["response_times"])
+            avg_token_usage = np.mean(results[model_name]["token_usage"])
+            tokens_per_second = avg_token_usage / avg_response_time if avg_response_time > 0 else 0
+            
+            # Update results with new metrics
+            results[model_name]["metrics"] = {
+                **metrics,
+                "tokens_per_second": tokens_per_second,
+                "subset_metrics": subset_metrics
+            }
+            
+            # Plot confusion matrix
+            cm_path = plot_confusion_matrix(
+                np.array(metrics["confusion_matrix"]),
+                model_name,
+                output_dir
+            )
+            results[model_name]["metrics"]["confusion_matrix_plot"] = cm_path
+    
+    # Save results
+    evaluation_results = {
+        "timestamp": timestamp,
+        "dataset_path": dataset_path,
+        "sample_size": sample_size,
+        "results": results,
+        "misclassified": misclassified
+    }
+    
+    with open(output_file, 'w') as f:
+        json.dump(evaluation_results, f, indent=2)
+    
+    logging.info(f"\nEvaluation results saved to: {output_file}")
+    return evaluation_results
 
-    evaluate_models(
-        dataset_path,
-        args.sample_size,
-        args.output_dir
-    )
+def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Evaluate multiple ASL recognition models')
+    parser.add_argument('--dataset_path', type=str, default='/Users/henrikjacobsen/Desktop/CBS/Semester 2/Artifical Intelligence and Machine Learning/Final Project/AIML25-shared/model_comparison/data',
+                       help='Path to the dataset directory (default: project data directory)')
+    parser.add_argument('--sample_size', type=int, default=1,
+                       help='Number of images to sample from each letter')
+    parser.add_argument('--output_dir', type=str, default='evaluation_results',
+                       help='Directory to save evaluation results')
+    args = parser.parse_args()
+    
+    # Ensure output directory exists
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    # Run evaluation
+    evaluate_models(args.dataset_path, args.sample_size, args.output_dir)
 
 if __name__ == "__main__":
     main() 
