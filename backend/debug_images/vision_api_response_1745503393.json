@@ -1,0 +1,29 @@
+{
+  "expected_sign": null,
+  "detected_sign": null,
+  "response": {
+    "id": "chatcmpl-14eda00f6637b796139f7f898cb961b1",
+    "object": "chat.completion",
+    "model_id": "ibm/granite-vision-3-2-2b",
+    "model": "ibm/granite-vision-3-2-2b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"letter\": \"V\",\n  \"confidence\": 0.9,\n  \"feedback\": \"The hand is forming a V shape with the index and middle fingers extended upward, and the other fingers curled down.\"\n}"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "created": 1745503395,
+    "model_version": "1.0.0",
+    "created_at": "2025-04-24T14:03:15.482Z",
+    "usage": {
+      "completion_tokens": 53,
+      "prompt_tokens": 396,
+      "total_tokens": 449
+    }
+  },
+  "extracted_text": "{\n  \"letter\": \"V\",\n  \"confidence\": 0.9,\n  \"feedback\": \"The hand is forming a V shape with the index and middle fingers extended upward, and the other fingers curled down.\"\n}"
+}

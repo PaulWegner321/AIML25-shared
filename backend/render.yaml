@@ -1,0 +1,47 @@
+services:
+  - type: web
+    name: asl-translate-backend
+    env: python
+    buildCommand: |
+      echo "Starting build process..."
+      pip install -r requirements.txt
+      echo "Creating directories..."
+      mkdir -p /opt/render/project/src/backend/app/models
+      echo "Copying model files..."
+      cp -r app/models/* /opt/render/project/src/backend/app/models/ || echo "No model files to copy"
+      echo "Copying weights file..."
+      # Try multiple possible locations for the weights file
+      if [ -f "app/asl_cnn_weights.pth" ]; then
+        echo "Found weights file at app/asl_cnn_weights.pth"
+        cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/models/
+        cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/
+      elif [ -f "app/asl_cnn_weights_2.pth" ]; then
+        echo "Found weights file at app/asl_cnn_weights_2.pth"
+        cp app/asl_cnn_weights_2.pth /opt/render/project/src/backend/app/models/asl_cnn_weights.pth
+        cp app/asl_cnn_weights_2.pth /opt/render/project/src/backend/app/asl_cnn_weights.pth
+      else
+        echo "ERROR: No weights file found in app directory"
+        ls -la app/
+      fi
+      echo "Listing model directory contents:"
+      ls -la /opt/render/project/src/backend/app/models/
+      echo "Listing app directory contents:"
+      ls -la /opt/render/project/src/backend/app/
+    startCommand: |
+      echo "Running model check..."
+      python app/check_model.py
+      echo "Running import fixes..."
+      python app/fix_imports.py
+      echo "Starting application..."
+      uvicorn app.main:app --host 0.0.0.0 --port $PORT --log-level debug
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.0
+      - key: PORT
+        value: 10000
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: debug
+    healthCheckPath: /health
+    autoDeploy: true 

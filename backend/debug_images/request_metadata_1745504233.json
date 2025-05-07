@@ -1,0 +1,16 @@
+{
+  "timestamp": 1745504233,
+  "file_info": {
+    "filename": "webcam.jpg",
+    "content_type": "image/jpeg",
+    "size_bytes": 142725
+  },
+  "parameters": {
+    "mode": "full",
+    "expected_sign": null,
+    "detected_sign": null,
+    "user_intention": "User is attempting to sign \"A\"",
+    "model_id": "granite-vision",
+    "model_type": "llm"
+  }
+}

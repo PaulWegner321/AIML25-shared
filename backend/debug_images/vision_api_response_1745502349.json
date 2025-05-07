@@ -1,0 +1,29 @@
+{
+  "expected_sign": null,
+  "detected_sign": null,
+  "response": {
+    "id": "chatcmpl-7e05677a1c8c93f47eb4f89c513dc72a",
+    "object": "chat.completion",
+    "model_id": "ibm/granite-vision-3-2-2b",
+    "model": "ibm/granite-vision-3-2-2b",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"letter\": \"A\",\n  \"confidence\": 95,\n  \"feedback\": \"The hand position is consistent with the letter 'A' in ASL, where the fist is with the thumb resting on the side.\"\n}"
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "created": 1745502350,
+    "model_version": "1.0.0",
+    "created_at": "2025-04-24T13:45:50.923Z",
+    "usage": {
+      "completion_tokens": 53,
+      "prompt_tokens": 283,
+      "total_tokens": 336
+    }
+  },
+  "extracted_text": "{\n  \"letter\": \"A\",\n  \"confidence\": 95,\n  \"feedback\": \"The hand position is consistent with the letter 'A' in ASL, where the fist is with the thumb resting on the side.\"\n}"
+}

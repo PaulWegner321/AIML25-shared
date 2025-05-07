@@ -1,0 +1,68 @@
+'use client';
+
+import { useState } from 'react';
+import DescriptionBox from '@/components/DescriptionBox';
+import { API_ENDPOINTS } from '@/utils/api';
+
+interface SignDescription {
+  word: string;
+  description: string;
+  steps: string[];
+  tips: string[];
+}
+
+export default function LookupPage() {
+  const [word, setWord] = useState('');
+  const [description, setDescription] = useState<SignDescription | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!word.trim()) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(API_ENDPOINTS.signDescription, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ word: word.trim() }),
+      });
+
+      const data = await response.json();
+      setDescription(data);
+    } catch (error) {
+      console.error('Error fetching sign description:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      <h1 className="text-3xl font-bold mb-8">Lookup ASL Signs</h1>
+
+      <form onSubmit={handleSearch} className="mb-8">
+        <div className="flex gap-4">
+          <input
+            type="text"
+            value={word}
+            onChange={(e) => setWord(e.target.value)}
+            placeholder="Enter a word, letter, or number"
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+          >
+            {isLoading ? 'Searching...' : 'Search'}
+          </button>
+        </div>
+      </form>
+
+      {description && <DescriptionBox description={description} />}
+    </div>
+  );
+} 
