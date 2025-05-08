@@ -15,6 +15,7 @@ import glob
 # Import the HandDetector
 from .models.keypoint_detector import HandDetector
 from .services.vision_evaluator import VisionEvaluator
+from .services.gpt4o_service import get_asl_prediction as gpt4o_predict
 
 # Load environment variables
 load_dotenv()
@@ -39,7 +40,9 @@ app.add_middleware(
         "http://127.0.0.1:3000",
         "https://asltranslate-p4sndxrkd-henriks-projects-f6f15939.vercel.app",
         "https://asltranslate-c8qu1q97f-henriks-projects-f6f15939.vercel.app",
-        "https://asl-edu-platform.vercel.app"
+        "https://asl-edu-platform.vercel.app",
+        "http://localhost:8000",  # Local backend
+        "https://asl-api.onrender.com"  # Deployed backend
     ] if ENVIRONMENT == "production" else ["*"],  # Allow all origins in development
     allow_credentials=True,
     allow_methods=["*"],
@@ -438,6 +441,70 @@ async def get_diagnostic():
     except Exception as e:
         print(f"Error generating diagnostic: {str(e)}")
         return {"status": "error", "message": str(e)}
+
+@app.post("/evaluate-gpt4o", response_model=SignEvaluationResponse)
+async def evaluate_gpt4o(
+    file: UploadFile = File(...),
+    expected_sign: str = Form(None)
+):
+    """Endpoint for GPT-4o vision model with visual grounding prompt"""
+    try:
+        # Read and decode image
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if image is None:
+            raise HTTPException(status_code=400, detail="Invalid image file")
+        
+        # Save image temporarily
+        temp_dir = Path("temp_images")
+        temp_dir.mkdir(exist_ok=True)
+        timestamp = int(time.time())
+        temp_image_path = temp_dir / f"temp_image_{timestamp}.jpg"
+        cv2.imwrite(str(temp_image_path), image)
+        
+        try:
+            # Get prediction from GPT-4o
+            result = gpt4o_predict(str(temp_image_path))
+            
+            # Clean up temporary file
+            os.remove(temp_image_path)
+            
+            if "error" in result:
+                return SignEvaluationResponse(
+                    success=False,
+                    error=result["error"]
+                )
+            
+            # Extract prediction details
+            predicted_letter = result.get("letter")
+            confidence = result.get("confidence", 0.0)
+            feedback = result.get("feedback", "")
+            
+            # If an expected sign was provided, check if the prediction matches
+            if expected_sign:
+                is_correct = predicted_letter.upper() == expected_sign.upper()
+                if not is_correct:
+                    feedback = f"{feedback}\n\nYou signed '{predicted_letter}', but the expected sign was '{expected_sign}'."
+            
+            return SignEvaluationResponse(
+                success=True,
+                letter=predicted_letter,
+                confidence=confidence,
+                feedback=feedback
+            )
+            
+        finally:
+            # Ensure temp file is cleaned up even if there's an error
+            if os.path.exists(temp_image_path):
+                os.remove(temp_image_path)
+                
+    except Exception as e:
+        return SignEvaluationResponse(
+            success=False,
+            error=f"Server error: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn
