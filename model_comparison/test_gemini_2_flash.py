@@ -35,12 +35,6 @@ MODEL_CONFIGS = {
         "display_name": "Gemini 2.0 Flash",
         "rate_limit_delay": 5,  # 5 seconds between requests
         "max_retries": 3
-    },
-    "flash-lite": {
-        "name": "gemini-2.0-flash-lite",
-        "display_name": "Gemini 2.0 Flash-Lite",
-        "rate_limit_delay": 3,  # 3 seconds between requests (faster than Flash)
-        "max_retries": 3
     }
 }
 
@@ -161,7 +155,7 @@ def encode_and_convert_image(image_path, target_format="JPEG", quality=95, max_s
         logging.error(f"Error processing image {image_path}: {e}")
         raise
 
-def get_asl_prediction(image_path: str, model_type: Literal["flash", "flash-lite"] = "flash", prompt_strategy: Literal["zero_shot", "few_shot", "chain_of_thought", "visual_grounding", "contrastive"] = "zero_shot") -> dict:
+def get_asl_prediction(image_path: str, model_type: Literal["flash"] = "flash", prompt_strategy: Literal["zero_shot", "few_shot", "chain_of_thought", "visual_grounding", "contrastive"] = "zero_shot") -> dict:
     """Get ASL prediction from specified Gemini model for a given image path, including visibility check."""
     if model_type not in MODEL_CONFIGS:
         raise ValueError(f"Invalid model type. Must be one of: {list(MODEL_CONFIGS.keys())}")
@@ -326,7 +320,7 @@ def main():
                         help='Path to the image file to test')
     parser.add_argument('--model', type=str, default="flash",
                         choices=list(MODEL_CONFIGS.keys()),
-                        help='Model to use (flash or flash-lite)')
+                        help='Model to use (flash)')
     parser.add_argument('--prompt-strategy', type=str, 
                         choices=['zero_shot', 'few_shot', 'chain_of_thought', 'visual_grounding', 'contrastive'], 
                         default='zero_shot',

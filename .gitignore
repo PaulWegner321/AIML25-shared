@@ -1,27 +1,65 @@
-# Environment variables
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
 .env
-backend/.env
+
+# Large data files
+*.csv
+*.pdf
+*.json
+*.log
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.mp4
+*.mov
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build files
+dist/
+build/
+*.egg-info/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+.coverage
+htmlcov/
+.pytest_cache/
 
 # Python
-__pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
+.env
+backend/.env
 parts/
 sdist/
 var/
 wheels/
-*.egg-info/
-.installed.cfg
+*.installed.cfg
 *.egg
 
 # Virtual Environment
@@ -43,12 +81,10 @@ Thumbs.db
 *.log
 
 # Data files
-*.json
 !package.json
 !package-lock.json
 
 # Node
-node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
