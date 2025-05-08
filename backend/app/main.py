@@ -16,6 +16,7 @@ import glob
 from .models.keypoint_detector import HandDetector
 from .services.vision_evaluator import VisionEvaluator
 from .services.gpt4o_service import get_asl_prediction as gpt4o_predict
+from .services.cnn_service import cnn_predictor
 
 # Load environment variables
 load_dotenv()
@@ -76,6 +77,18 @@ class JudgmentResponse(BaseModel):
 hand_detector = HandDetector()
 vision_evaluator = VisionEvaluator()
 
+@app.on_event("startup")
+async def startup_event():
+    """Initialize models and services on startup."""
+    try:
+        # Load CNN model
+        model_path = os.path.join(os.path.dirname(__file__), "models", "cnn_model.pth")
+        cnn_predictor.load_model(model_path)
+    except Exception as e:
+        print(f"Error loading CNN model: {e}")
+        # Don't raise the error, let the application start without the CNN model
+        # The endpoints will handle the error gracefully
+
 @app.get("/")
 async def root():
     return {
@@ -100,8 +113,13 @@ async def evaluate_sign(
         if image is None:
             raise HTTPException(status_code=400, detail="Invalid image file")
         
-        # Detect sign
-        result = hand_detector.detect_sign(image)
+        # Use appropriate model based on model_id
+        if model_id == "model1":
+            # Use the new CNN model
+            result = cnn_predictor.predict(image)
+        else:
+            # Use the existing hand detector for other models
+            result = hand_detector.detect_sign(image)
         
         if not result['success']:
             return SignEvaluationResponse(
