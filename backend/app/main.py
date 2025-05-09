@@ -17,7 +17,6 @@ import logging
 from .models.keypoint_detector import HandDetector
 from .services.vision_evaluator import VisionEvaluator
 from .services.gpt4o_service import get_asl_prediction as gpt4o_predict
-from .models.cnn_model import ASLCNNModel, CNNPredictor
 from .models.new_cnn_model import NewCNNPredictor
 
 # Load environment variables
@@ -78,7 +77,6 @@ class JudgmentResponse(BaseModel):
 # Initialize model instances
 hand_detector = HandDetector()
 vision_evaluator = VisionEvaluator()
-cnn_predictor = CNNPredictor()
 new_cnn_predictor = NewCNNPredictor()
 
 # Initialize logger
@@ -88,10 +86,6 @@ logger = logging.getLogger(__name__)
 async def startup_event():
     """Initialize models and services on startup."""
     try:
-        # Load original CNN model
-        model_path = os.path.join(os.path.dirname(__file__), "models", "weights", "cnn_model.pth")
-        cnn_predictor.load_model(model_path)
-        
         # Load new CNN model
         new_model_path = os.path.join(os.path.dirname(__file__), "models", "weights", "new_cnn_model.pth")
         new_cnn_predictor.load_model(new_model_path)
@@ -110,7 +104,7 @@ async def root():
 async def evaluate_sign(
     file: UploadFile = File(...), 
     expected_sign: str = Form(None),
-    model_id: str = Form("model1"),
+    model_id: str = Form("new"),
     model_type: str = Form("image_processing")
 ):
     try:
@@ -123,9 +117,10 @@ async def evaluate_sign(
             raise HTTPException(status_code=400, detail="Invalid image file")
         
         # Use appropriate model based on model_id
-        if model_id == "model1":
+        if model_id == "new":
             # Use the new CNN model
-            result = cnn_predictor.predict(image)
+            letter, confidence = new_cnn_predictor.predict(image)
+            result = {'success': True, 'letter': letter, 'confidence': confidence}
         else:
             # Use the existing hand detector for other models
             result = hand_detector.detect_sign(image)
@@ -534,10 +529,10 @@ async def evaluate_gpt4o(
         )
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...), model: str = "original"):
+async def predict(file: UploadFile = File(...), model: str = "new"):
     """
     Predict ASL letter from uploaded image using specified model.
-    model parameter can be "original" or "new"
+    model parameter can be "new" or "keypoint"
     """
     try:
         # Read and process the image
@@ -551,10 +546,7 @@ async def predict(file: UploadFile = File(...), model: str = "original"):
         logger.info(f"Processing image with model: {model}")
         logger.info(f"Image shape: {image.shape}")
         
-        if model == "original":
-            # Use original CNN model
-            letter, confidence = cnn_predictor.predict(image)
-        elif model == "new":
+        if model == "new":
             # Use new CNN model
             try:
                 letter, confidence = new_cnn_predictor.predict(image)
@@ -564,8 +556,15 @@ async def predict(file: UploadFile = File(...), model: str = "original"):
                     status_code=500,
                     detail=f"Error processing image with new CNN model: {str(e)}"
                 )
+        elif model == "keypoint":
+            # Use keypoint detector as fallback
+            result = hand_detector.detect_sign(image)
+            if not result['success']:
+                raise HTTPException(status_code=500, detail=result.get('error', 'Failed to detect hand'))
+            letter = result['letter']
+            confidence = result['confidence']
         else:
-            raise HTTPException(status_code=400, detail="Invalid model specified. Use 'original' or 'new'")
+            raise HTTPException(status_code=400, detail="Invalid model specified. Use 'new' or 'keypoint'")
             
         logger.info(f"Prediction successful: letter={letter}, confidence={confidence}")
         return {
