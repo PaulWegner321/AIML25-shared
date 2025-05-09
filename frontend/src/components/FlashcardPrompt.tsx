@@ -204,6 +204,7 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
   const handleTryAgain = () => {
     setCapturedImage(null);
     setCameraError(null);
+    onCardChange();
     startCamera();
   };
 
@@ -253,18 +254,28 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
       <div className="relative w-full h-96 bg-gray-100 rounded-lg overflow-hidden mb-4">
         {isInitialized ? (
           <>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              controls={false}
-              className={`w-full h-full object-cover ${isCameraActive ? '' : 'hidden'}`}
-            />
-            {!isCameraActive && (
-              <div className="flex items-center justify-center h-full">
-                <p className="text-gray-500">Camera is off</p>
-              </div>
+            {capturedImage ? (
+              <img
+                src={capturedImage}
+                alt="Captured sign"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <>
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  controls={false}
+                  className={`w-full h-full object-cover ${isCameraActive ? '' : 'hidden'}`}
+                />
+                {!isCameraActive && (
+                  <div className="flex items-center justify-center h-full">
+                    <p className="text-gray-500">Camera is off</p>
+                  </div>
+                )}
+              </>
             )}
           </>
         ) : (

@@ -47,7 +47,14 @@ export default function PracticePage() {
       } else {
         // Handle error case
         console.log('Setting error feedback:', result.error);
-        const errorMessage = result.error || 'No hand detected. Please try again.';
+        let errorMessage = 'Failed to detect sign. ';
+        
+        if (result.error === 'No JSON found in response') {
+          errorMessage += 'The model failed to process the image. Please try again or select a different model.';
+        } else {
+          errorMessage += result.error || 'Please try again.';
+        }
+        
         setFeedback(errorMessage);
         setIsCorrect(false);
         setDetectedLetter(null);
