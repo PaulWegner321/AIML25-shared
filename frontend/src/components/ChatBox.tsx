@@ -9,22 +9,20 @@ interface ChatMessage {
 interface ChatBoxProps {
   signName: string;
   onClose: () => void;
+  onMinimize?: () => void;
 }
 
-const ChatBox = ({ signName, onClose }: ChatBoxProps) => {
+const ChatBox = ({ signName, onClose, onMinimize }: ChatBoxProps) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [isMinimized, setIsMinimized] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Scroll to bottom when messages change
   useEffect(() => {
-    if (!isMinimized) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages, isMinimized]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   // Initialize chat on component mount
   useEffect(() => {
@@ -105,11 +103,6 @@ const ChatBox = ({ signName, onClose }: ChatBoxProps) => {
       
       // Add assistant response
       setMessages((prev) => [...prev, { role: 'assistant', content: data.response }]);
-      
-      // Un-minimize if minimized
-      if (isMinimized) {
-        setIsMinimized(false);
-      }
     } catch (error) {
       console.error('Error sending message:', error);
       // Add error message
@@ -125,53 +118,23 @@ const ChatBox = ({ signName, onClose }: ChatBoxProps) => {
     }
   };
 
-  // Minimized chat
-  if (isMinimized) {
-    return (
-      <div className="flex flex-col bg-white rounded-lg shadow-lg overflow-hidden">
-        <div className="flex justify-between items-center p-2 bg-blue-600 text-white">
-          <h3 className="font-bold text-sm">ASL Tutor - Letter '{signName}'</h3>
-          <div className="flex space-x-1">
-            <button 
-              onClick={() => setIsMinimized(false)}
-              className="text-white hover:bg-blue-700 rounded-full p-1"
-              aria-label="Maximize chat"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" />
-              </svg>
-            </button>
-            <button 
-              onClick={onClose}
-              className="text-white hover:bg-blue-700 rounded-full p-1"
-              aria-label="Close chat"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Full chat
   return (
     <div className="flex flex-col h-full bg-white rounded-lg shadow-lg overflow-hidden">
       {/* Header */}
       <div className="flex justify-between items-center p-2 bg-blue-600 text-white">
         <h3 className="font-bold text-sm">ASL Tutor - Letter '{signName}'</h3>
         <div className="flex space-x-1">
-          <button 
-            onClick={() => setIsMinimized(true)}
-            className="text-white hover:bg-blue-700 rounded-full p-1"
-            aria-label="Minimize chat"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 12H6" />
-            </svg>
-          </button>
+          {onMinimize && (
+            <button 
+              onClick={onMinimize}
+              className="text-white hover:bg-blue-700 rounded-full p-1"
+              aria-label="Minimize chat"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 12H6" />
+              </svg>
+            </button>
+          )}
           <button 
             onClick={onClose}
             className="text-white hover:bg-blue-700 rounded-full p-1"
