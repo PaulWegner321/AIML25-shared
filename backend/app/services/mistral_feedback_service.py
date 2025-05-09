@@ -83,7 +83,7 @@ class MistralFeedbackService:
         # Get the correct sign details
         correct_sign_details = self.Sign_knowledge.get(expected_sign.upper(), "Sign details not available.")
         
-        prompt = f"""You are an ASL instructor. Based on the detailed description of a hand gesture below, provide structured feedback for the user.
+        prompt = f"""You are an expert ASL instructor providing feedback directly to a student. Based on the detailed description of their hand gesture below, provide clear, concise, and actionable feedback.
 
 Image Description: {image_description}
 
@@ -94,13 +94,15 @@ Is Correct: {is_correct}
 Correct Sign Reference:
 {correct_sign_details}
 
-Analyze the description and provide:
-1. A clear description of what the user did
-2. Specific steps to improve their sign (at least 3 numbered steps)
-3. Helpful tips for better execution (at least 2 bullet points)
+Your feedback guidelines:
+- Speak directly to the student in a friendly, encouraging tone
+- Do not refer to "the user" - use "you" instead
+- Be concise but specific
+- If the sign is correct: Give brief praise and 1-2 tips for further improvement
+- If the sign is incorrect: Briefly explain what needs adjustment, then provide specific tips to improve
 
 Format your response exactly like this:
-DESCRIPTION: [One clear sentence about what you see]
+DESCRIPTION: [One clear, conversational sentence about what you see]
 
 STEPS:
 1. [First improvement step]
@@ -155,29 +157,29 @@ TIPS:
             # Default responses if nothing was generated
             if not description_section:
                 if is_correct:
-                    description_section = f"You correctly signed the letter '{expected_sign}'."
+                    description_section = f"Great job! You correctly signed the letter '{expected_sign}'."
                 else:
-                    description_section = f"The model detected that you signed '{detected_sign}', but the expected sign was '{expected_sign}'."
+                    description_section = f"I noticed that you signed what looks like '{detected_sign}', but we were practicing the letter '{expected_sign}'."
             
             # Default steps if none were generated
             if not steps:
                 if is_correct:
-                    steps = ["Continue practicing to maintain consistency", 
-                            "Try signing at different speeds to build fluency", 
-                            "Practice transitioning between this sign and others"]
+                    steps = ["Continue practicing to maintain your excellent form", 
+                            "Try signing at different speeds to build your fluency", 
+                            "Practice transitioning between this sign and others to build muscle memory"]
                 else:
-                    steps = [f"Study the correct hand position for '{expected_sign}'", 
-                            "Practice the correct position slowly", 
-                            "Compare your sign with reference images"]
+                    steps = [f"Review the correct hand position for '{expected_sign}' shown in the guide", 
+                            "Practice the correct position slowly in front of a mirror", 
+                            "Compare your sign with the reference images to spot differences"]
             
             # Default tips if none were generated
             if not tips:
                 if is_correct:
-                    tips = ["Keep your hand in good lighting for better visibility",
-                           "Maintain proper hand positioning for clarity"]
+                    tips = ["Keep your hand in good lighting for better visibility when practicing with the app",
+                           "Maintain consistent hand positioning for clarity in real conversations"]
                 else:
-                    tips = ["Ensure your hand is fully visible to the camera",
-                           "Pay attention to finger positioning and hand orientation"]
+                    tips = ["Ensure your entire hand is visible to the camera when practicing",
+                           "Pay close attention to specific finger positions described in the reference"]
             
             return {
                 "description": description_section,
@@ -188,9 +190,9 @@ TIPS:
         except Exception as e:
             print(f"Error generating feedback with Mistral: {str(e)}")
             return {
-                "description": f"The model detected that you signed '{detected_sign}', but the expected sign was '{expected_sign}'.",
-                "steps": ["Study the correct hand position", "Practice the correct position slowly", "Compare your sign with reference images"],
-                "tips": ["Ensure your hand is fully visible to the camera", "Pay attention to finger positioning and hand orientation"]
+                "description": f"I noticed you signed what looks like '{detected_sign}', but we were practicing the letter '{expected_sign}'. Let me help you improve!",
+                "steps": ["Review the correct hand position in the guide", "Practice forming the sign slowly and deliberately", "Compare your sign with the reference images to spot differences"],
+                "tips": ["Make sure your entire hand is clearly visible to the camera", "Pay special attention to the finger positions described in the guide"]
             }
 
 # Create a singleton instance
