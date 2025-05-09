@@ -122,71 +122,40 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
       stopCamera();
 
       if (blob) {
-        let cnnResult;
         try {
-          // Call new CNN model endpoint
-          const cnnFormData = new FormData();
-          cnnFormData.append('file', blob, 'webcam.jpg');
-          cnnFormData.append('model', 'new');
+          // Use the new evaluation endpoint that uses CNN → GPT-4V → Mistral pipeline
+          const formData = new FormData();
+          formData.append('file', blob, 'webcam.jpg');
+          formData.append('expected_sign', currentSign);
           
-          const cnnResponse = await fetch(API_ENDPOINTS.predict, {
+          const response = await fetch(API_ENDPOINTS.evaluate, {
             method: 'POST',
-            body: cnnFormData,
+            body: formData,
           });
           
-          if (!cnnResponse.ok) {
-            throw new Error(`HTTP error! status: ${cnnResponse.status}`);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
           }
           
-          cnnResult = await cnnResponse.json();
-          const detectedLetter = cnnResult.predicted_letter;
-          const isCorrect = detectedLetter.toUpperCase() === currentSign.toUpperCase();
+          const result = await response.json();
           
-          // Get feedback from GPT-4 Vision
-          const feedbackFormData = new FormData();
-          feedbackFormData.append('file', blob, 'webcam.jpg');
-          feedbackFormData.append('expected_sign', currentSign);
-          feedbackFormData.append('detected_sign', detectedLetter);
-          feedbackFormData.append('is_correct', String(isCorrect));
-          
-          const feedbackResponse = await fetch(API_ENDPOINTS.getFeedback, {
-            method: 'POST',
-            body: feedbackFormData,
-          });
-          
-          if (!feedbackResponse.ok) {
-            throw new Error(`HTTP error! status: ${feedbackResponse.status}`);
+          if (result.success) {
+            const combinedResult = {
+              success: true,
+              letter: result.letter,
+              confidence: result.confidence,
+              feedback: `${result.description}\n\nSteps to improve:\n${result.steps.join('\n')}\n\nTips:\n${result.tips.join('\n')}` // Use all the structured feedback
+            };
+            
+            setLatestFeedback(combinedResult.feedback);
+            onSignCaptured(imageData, currentSign, combinedResult);
+          } else {
+            throw new Error(result.error || 'Failed to evaluate sign');
           }
-          
-          const feedbackResult = await feedbackResponse.json();
-          
-          // Only use the feedback from the model
-          const combinedResult = {
-            success: true,
-            letter: detectedLetter,
-            confidence: cnnResult.confidence,
-            feedback: feedbackResult.feedback // Only show the feedback, not CNN output
-          };
-          setLatestFeedback(feedbackResult.feedback);
-          // Call the parent component's callback with the combined result
-          onSignCaptured(imageData, currentSign, combinedResult);
           
         } catch (error) {
-          console.error('Error calling models:', error);
+          console.error('Error calling evaluation endpoint:', error);
           setCameraError(`API error: ${error instanceof Error ? error.message : String(error)}`);
-          
-          // If we have at least one successful result, use that
-          if (cnnResult) {
-            const fallbackResult = {
-              success: true,
-              letter: cnnResult.predicted_letter,
-              confidence: cnnResult.confidence,
-              feedback: `Predicted letter ${cnnResult.predicted_letter} with ${(cnnResult.confidence * 100).toFixed(1)}% confidence. (Detailed feedback unavailable)`
-            };
-            onSignCaptured(imageData, currentSign, fallbackResult);
-          } else {
-            throw error; // Re-throw if both models failed
-          }
         }
       }
     } catch (error) {

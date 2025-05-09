@@ -1,10 +1,9 @@
 'use client';
-
 import React, { useEffect, useRef, useState } from 'react';
-import ModelSelector from '@/components/ModelSelector';
-import FeedbackBox from '@/components/FeedbackBox';
-import LookupBox from '@/components/LookupBox';
-import { processFrame } from '@/utils/processFrame';
+import ModelSelector from './components/ModelSelector';
+import FeedbackBox from './components/FeedbackBox';
+import LookupBox from './components/LookupBox';
+import { processFrame } from './utils/processFrame';
 
 export default function Home() {
   const videoRef = useRef<HTMLVideoElement>(null);

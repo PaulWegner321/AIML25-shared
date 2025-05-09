@@ -16,10 +16,11 @@ import logging
 # Import the HandDetector
 from .models.keypoint_detector import HandDetector
 from .services.vision_evaluator import VisionEvaluator
-from .services.gpt4o_service import get_asl_prediction as gpt4o_predict
+from .services.gpt4o_service import get_asl_prediction
 from .services.feedback_service import get_sign_feedback
 from .models.new_cnn_model import NewCNNPredictor
 from .services.llm_service import llm_service, SignRequest
+from .services.mistral_feedback_service import mistral_feedback_service
 
 # Load environment variables
 load_dotenv()
@@ -105,59 +106,57 @@ async def root():
         "environment": ENVIRONMENT
     }
 
-@app.post("/evaluate-sign", response_model=SignEvaluationResponse)
-async def evaluate_sign(
-    file: UploadFile = File(...), 
-    expected_sign: str = Form(None),
-    model_id: str = Form("new"),
-    model_type: str = Form("image_processing")
-):
+@app.post("/evaluate")
+async def evaluate_sign(file: UploadFile = File(...), expected_sign: str = Form(...)):
+    """
+    Evaluate an ASL sign using the new pipeline:
+    1. CNN model for initial prediction
+    2. GPT-4V for detailed image description
+    3. Mistral for generating structured feedback
+    """
     try:
-        # Read and decode image
+        # Read and process the image
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         
-        if image is None:
-            raise HTTPException(status_code=400, detail="Invalid image file")
+        # Save image temporarily for GPT-4V
+        timestamp = int(time.time())
+        temp_path = f"temp_image_{timestamp}.jpg"
+        cv2.imwrite(temp_path, image)
         
-        # Use appropriate model based on model_id
-        if model_id == "new":
-            # Use the new CNN model
-            letter, confidence = new_cnn_predictor.predict(image)
-            result = {'success': True, 'letter': letter, 'confidence': confidence}
-        else:
-            # Use the existing hand detector for other models
-            result = hand_detector.detect_sign(image)
-        
-        if not result['success']:
-            return SignEvaluationResponse(
-                success=False,
-                error=result.get('error', 'Failed to detect hand in image')
-            )
-        
-        # If an expected sign was provided, check if the prediction matches
-        if expected_sign:
-            is_correct = result['letter'].lower() == expected_sign.lower()
-            if is_correct:
-                feedback = "Good job! Your sign is correct."
-            else:
-                feedback = f"Your sign was interpreted as '{result['letter']}', but the expected sign was '{expected_sign}'. Try again!"
+        try:
+            # Step 1: Get CNN prediction
+            predicted_letter, confidence = new_cnn_predictor.predict(image)
             
-            return SignEvaluationResponse(
-                success=True,
-                letter=result['letter'],
-                confidence=result['confidence'],
-                error=None if is_correct else feedback,
-                feedback=feedback
+            # Step 2: Get detailed image description from GPT-4V
+            gpt4v_result = get_asl_prediction(temp_path)
+            
+            # Step 3: Generate feedback using Mistral based on GPT-4V's description
+            feedback = mistral_feedback_service.generate_feedback(
+                image_description=gpt4v_result.get("feedback", ""),
+                expected_sign=expected_sign,
+                detected_sign=predicted_letter
             )
-        
-        return SignEvaluationResponse(
-            success=True,
-            letter=result['letter'],
-            confidence=result['confidence']
-        )
-        
+            
+            # Clean up temporary file
+            os.remove(temp_path)
+            
+            return {
+                "success": True,
+                "letter": predicted_letter,
+                "confidence": confidence,
+                "description": feedback["description"],
+                "steps": feedback["steps"],
+                "tips": feedback["tips"]
+            }
+            
+        except Exception as e:
+            # Clean up temporary file in case of error
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+            raise e
+            
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -493,7 +492,7 @@ async def evaluate_gpt4o(
         
         try:
             # Get prediction from GPT-4o
-            result = gpt4o_predict(str(temp_image_path))
+            result = get_asl_prediction(str(temp_image_path))
             
             # Clean up temporary file
             os.remove(temp_image_path)
@@ -534,7 +533,7 @@ async def evaluate_gpt4o(
         )
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...), model: str = "new"):
+async def predict(file: UploadFile = File(...), model: str = Form("new")):
     """
     Predict ASL letter from uploaded image using specified model.
     model parameter can be "new" or "keypoint"

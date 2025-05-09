@@ -33,6 +33,43 @@ interface FeedbackBoxProps {
 }
 
 const FeedbackBox = ({ feedback, isCorrect, detectedLetter, confidence, expectedLetter }: FeedbackBoxProps) => {
+  // Parse the feedback to extract description, steps, and tips
+  const parseFeedback = (feedback: string): { description: string, steps: string[], tips: string[] } => {
+    const parts = { 
+      description: '', 
+      steps: [] as string[], 
+      tips: [] as string[] 
+    };
+    
+    if (!feedback) return parts;
+    
+    // Split the feedback into sections
+    const sections = feedback.split('\n\n');
+    
+    // First section is always the description
+    if (sections.length > 0) {
+      parts.description = sections[0];
+    }
+    
+    // Find steps section
+    const stepsIndex = sections.findIndex(s => s.toLowerCase().includes('steps to improve:'));
+    if (stepsIndex !== -1) {
+      const stepsText = sections[stepsIndex].replace('Steps to improve:', '').trim();
+      parts.steps = stepsText.split('\n').filter(s => s.trim() !== '');
+    }
+    
+    // Find tips section
+    const tipsIndex = sections.findIndex(s => s.toLowerCase().includes('tips:'));
+    if (tipsIndex !== -1) {
+      const tipsText = sections[tipsIndex].replace('Tips:', '').trim();
+      parts.tips = tipsText.split('\n').filter(s => s.trim() !== '');
+    }
+    
+    return parts;
+  };
+  
+  const feedbackParts = feedback ? parseFeedback(feedback) : { description: '', steps: [], tips: [] };
+  
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
       <h2 className="text-2xl font-bold mb-4">Feedback</h2>
@@ -78,20 +115,48 @@ const FeedbackBox = ({ feedback, isCorrect, detectedLetter, confidence, expected
         </div>
       )}
 
-      {/* Feedback Box - Shown for both correct and incorrect signs */}
+      {/* Structured Feedback Box */}
       {feedback && (
         <Tooltip text={isCorrect ? "Analysis of your correct sign" : "Detailed feedback about your sign and suggestions for improvement"}>
           <div 
             className={`${
-              isCorrect ? 'bg-green-100 text-green-900' : 'bg-orange-100 text-orange-900'
-            } p-4 rounded-lg mb-4 relative`}
+              isCorrect ? 'bg-green-50 border border-green-200' : 'bg-orange-50 border border-orange-200'
+            } rounded-lg mb-4 relative overflow-hidden`}
           >
-            <h3 className="text-sm font-medium mb-2">
+            <h3 className={`text-sm font-medium p-3 mb-0 ${
+              isCorrect ? 'bg-green-100 text-green-800' : 'bg-orange-100 text-orange-800'
+            }`}>
               {isCorrect ? 'Analysis' : 'Improvement Feedback'}
             </h3>
-            <div className="prose prose-sm max-w-none">
-              <ReactMarkdown>{feedback}</ReactMarkdown>
+
+            {/* Description Section */}
+            <div className="p-4 border-b border-gray-200">
+              {feedbackParts.description}
             </div>
+            
+            {/* Steps Section - only show if there are steps */}
+            {feedbackParts.steps.length > 0 && (
+              <div className="p-4 border-b border-gray-200">
+                <h4 className="font-medium mb-2">Steps to improve:</h4>
+                <ol className="list-decimal list-inside space-y-1 ml-2">
+                  {feedbackParts.steps.map((step, index) => (
+                    <li key={index} className="pl-2">{step}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            
+            {/* Tips Section - only show if there are tips */}
+            {feedbackParts.tips.length > 0 && (
+              <div className="p-4">
+                <h4 className="font-medium mb-2">Tips:</h4>
+                <ul className="list-disc list-inside space-y-1 ml-2">
+                  {feedbackParts.tips.map((tip, index) => (
+                    <li key={index} className="pl-2">{tip}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </Tooltip>
       )}

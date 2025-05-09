@@ -2,20 +2,19 @@
 const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Use local backend in development, production backend otherwise
-const API_URL = isDevelopment 
-  ? 'http://localhost:8000'
-  : 'https://asl-api.onrender.com';
+const API_BASE = isDevelopment ? 'http://localhost:8000' : process.env.NEXT_PUBLIC_API_URL || 'https://asl-api.onrender.com';
 
-console.log('Using API URL:', API_URL);
+console.log('Using API URL:', API_BASE);
 
 export const API_ENDPOINTS = {
-  evaluateSign: `${API_URL}/evaluate-sign`,
-  evaluateGPT4o: `${API_URL}/evaluate-gpt4o`,
-  predict: `${API_URL}/predict`,
-  signDescription: `${API_URL}/sign-description`,
-  debugImages: `${API_URL}/debug-images`,
-  debugImage: (filename: string) => `${API_URL}/debug-image/${filename}`,
-  diagnostic: `${API_URL}/diagnostic`,
-  ping: `${API_URL}/ping`,
-  getFeedback: `${API_URL}/get-feedback`,
+  evaluateSign: `${API_BASE}/evaluate-vision`,
+  evaluateGPT4o: `${API_BASE}/evaluate-gpt4o`,
+  evaluate: `${API_BASE}/evaluate`,  // New endpoint for CNN → GPT-4V → Mistral pipeline
+  predict: `${API_BASE}/predict`,
+  signDescription: `${API_BASE}/sign-description`,
+  debugImages: `${API_BASE}/debug-images`,
+  debugImage: (filename: string) => `${API_BASE}/debug-image/${filename}`,
+  diagnostic: `${API_BASE}/diagnostic`,
+  ping: `${API_BASE}/ping`,
+  getFeedback: `${API_BASE}/get-feedback`,
 }; 
