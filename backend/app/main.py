@@ -19,6 +19,7 @@ from .services.vision_evaluator import VisionEvaluator
 from .services.gpt4o_service import get_asl_prediction as gpt4o_predict
 from .services.feedback_service import get_sign_feedback
 from .models.new_cnn_model import NewCNNPredictor
+from .services.llm_service import llm_service, SignRequest
 
 # Load environment variables
 load_dotenv()
@@ -66,6 +67,9 @@ class SignEvaluationResponse(BaseModel):
     confidence: Optional[float] = None
     error: Optional[str] = None
     feedback: Optional[str] = None
+
+class SignDescriptionRequest(BaseModel):
+    word: str
 
 # Define response models
 class TranslationResponse(BaseModel):
@@ -638,6 +642,18 @@ async def get_feedback(
             success=False,
             error=f"Server error: {str(e)}"
         )
+
+@app.post("/lookup")
+async def lookup_endpoint(request: SignRequest):
+    """Endpoint for looking up ASL signs using the LLM service"""
+    return await llm_service.lookup_sign(request)
+
+@app.post("/sign-description")
+async def get_sign_description(request: SignDescriptionRequest):
+    """Endpoint for getting ASL sign descriptions that matches frontend interface"""
+    # Convert the request to match the llm_service interface
+    llm_request = SignRequest(sign_name=request.word)
+    return await llm_service.lookup_sign(llm_request)
 
 if __name__ == "__main__":
     import uvicorn

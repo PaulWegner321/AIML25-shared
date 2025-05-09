@@ -17,7 +17,7 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
   const [isInitialized, setIsInitialized] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [currentSignIndex, setCurrentSignIndex] = useState(0);
-  const [selectedModel, setSelectedModel] = useState('model1');
+  const [selectedModel, setSelectedModel] = useState('model2');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isClient, setIsClient] = useState(false);
@@ -30,9 +30,8 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
 
   // Model options
   const modelOptions = [
-    { id: 'model1', name: 'CNN Model 1 (Original)' },
-    { id: 'model2', name: 'CNN Model 2 (New)' },
-    { id: 'gpt4o', name: 'GPT-4 Vision (Best Performance)' }
+    { id: 'model2', name: 'CNN Model' },
+    { id: 'gpt4o', name: 'GPT-4o' }
   ];
 
   // Initialize component
