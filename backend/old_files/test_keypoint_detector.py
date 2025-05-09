@@ -3,7 +3,7 @@ import sys
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from models.keypoint_detector import HandDetector
+from backend.app.models.keypoint_detector import HandDetector
 
 def test_detector():
     # Initialize the hand detector

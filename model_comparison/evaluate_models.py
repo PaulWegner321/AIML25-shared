@@ -34,7 +34,7 @@ try:
     sys.path.append(project_root)
     
     # Now we can import from backend
-    from backend.app.models.sign_evaluator import ColorASLCNN
+    from backend.old_files.sign_evaluator import ColorASLCNN
 except ImportError as e:
     logging.error(f"Failed to import ColorASLCNN: {e}")
     logging.error("Please ensure evaluate_models.py is run from a location where 'backend' is a reachable package, or adjust the import path.")
@@ -702,7 +702,7 @@ try:
     sys.path.append(project_root)
     
     # Now we can import from backend
-    from backend.app.models.sign_evaluator import ColorASLCNN
+    from backend.old_files.sign_evaluator import ColorASLCNN
 except ImportError as e:
     logging.error(f"Failed to import ColorASLCNN: {e}")
     logging.error("Please ensure evaluate_models.py is run from a location where 'backend' is a reachable package, or adjust the import path.")

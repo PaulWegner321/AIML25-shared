@@ -6,27 +6,21 @@ services:
       echo "Starting build process..."
       pip install -r requirements.txt
       echo "Creating directories..."
-      mkdir -p /opt/render/project/src/backend/app/models
+      mkdir -p /opt/render/project/src/backend/app/models/weights
       echo "Copying model files..."
       cp -r app/models/* /opt/render/project/src/backend/app/models/ || echo "No model files to copy"
       echo "Copying weights file..."
-      # Try multiple possible locations for the weights file
-      if [ -f "app/asl_cnn_weights.pth" ]; then
-        echo "Found weights file at app/asl_cnn_weights.pth"
-        cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/models/
-        cp app/asl_cnn_weights.pth /opt/render/project/src/backend/app/
-      elif [ -f "app/asl_cnn_weights_2.pth" ]; then
-        echo "Found weights file at app/asl_cnn_weights_2.pth"
-        cp app/asl_cnn_weights_2.pth /opt/render/project/src/backend/app/models/asl_cnn_weights.pth
-        cp app/asl_cnn_weights_2.pth /opt/render/project/src/backend/app/asl_cnn_weights.pth
+      if [ -f "app/models/weights/cnn_model.pth" ]; then
+        echo "Found weights file at app/models/weights/cnn_model.pth"
+        cp app/models/weights/cnn_model.pth /opt/render/project/src/backend/app/models/weights/cnn_model.pth
       else
-        echo "ERROR: No weights file found in app directory"
-        ls -la app/
+        echo "ERROR: No weights file found in models/weights directory"
+        ls -la app/models/weights/
       fi
       echo "Listing model directory contents:"
       ls -la /opt/render/project/src/backend/app/models/
-      echo "Listing app directory contents:"
-      ls -la /opt/render/project/src/backend/app/
+      echo "Listing weights directory contents:"
+      ls -la /opt/render/project/src/backend/app/models/weights/
     startCommand: |
       echo "Running model check..."
       python app/check_model.py

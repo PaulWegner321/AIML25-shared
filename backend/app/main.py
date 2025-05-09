@@ -82,7 +82,7 @@ async def startup_event():
     """Initialize models and services on startup."""
     try:
         # Load CNN model
-        model_path = os.path.join(os.path.dirname(__file__), "models", "cnn_model.pth")
+        model_path = os.path.join(os.path.dirname(__file__), "models", "weights", "cnn_model.pth")
         cnn_predictor.load_model(model_path)
     except Exception as e:
         print(f"Error loading CNN model: {e}")
