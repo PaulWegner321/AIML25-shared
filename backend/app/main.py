@@ -11,12 +11,14 @@ import datetime
 from pathlib import Path
 import time
 import glob
+import logging
 
 # Import the HandDetector
 from .models.keypoint_detector import HandDetector
 from .services.vision_evaluator import VisionEvaluator
 from .services.gpt4o_service import get_asl_prediction as gpt4o_predict
-from .services.cnn_service import cnn_predictor
+from .models.cnn_model import ASLCNNModel, CNNPredictor
+from .models.new_cnn_model import NewCNNPredictor
 
 # Load environment variables
 load_dotenv()
@@ -76,18 +78,25 @@ class JudgmentResponse(BaseModel):
 # Initialize model instances
 hand_detector = HandDetector()
 vision_evaluator = VisionEvaluator()
+cnn_predictor = CNNPredictor()
+new_cnn_predictor = NewCNNPredictor()
+
+# Initialize logger
+logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup_event():
     """Initialize models and services on startup."""
     try:
-        # Load CNN model
+        # Load original CNN model
         model_path = os.path.join(os.path.dirname(__file__), "models", "weights", "cnn_model.pth")
         cnn_predictor.load_model(model_path)
+        
+        # Load new CNN model
+        new_model_path = os.path.join(os.path.dirname(__file__), "models", "weights", "new_cnn_model.pth")
+        new_cnn_predictor.load_model(new_model_path)
     except Exception as e:
-        print(f"Error loading CNN model: {e}")
-        # Don't raise the error, let the application start without the CNN model
-        # The endpoints will handle the error gracefully
+        print(f"Error loading models: {e}")
 
 @app.get("/")
 async def root():
@@ -523,6 +532,52 @@ async def evaluate_gpt4o(
             success=False,
             error=f"Server error: {str(e)}"
         )
+
+@app.post("/predict")
+async def predict(file: UploadFile = File(...), model: str = "original"):
+    """
+    Predict ASL letter from uploaded image using specified model.
+    model parameter can be "original" or "new"
+    """
+    try:
+        # Read and process the image
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if image is None:
+            raise HTTPException(status_code=400, detail="Invalid image file")
+            
+        logger.info(f"Processing image with model: {model}")
+        logger.info(f"Image shape: {image.shape}")
+        
+        if model == "original":
+            # Use original CNN model
+            letter, confidence = cnn_predictor.predict(image)
+        elif model == "new":
+            # Use new CNN model
+            try:
+                letter, confidence = new_cnn_predictor.predict(image)
+            except Exception as e:
+                logger.error(f"Error using new CNN model: {str(e)}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Error processing image with new CNN model: {str(e)}"
+                )
+        else:
+            raise HTTPException(status_code=400, detail="Invalid model specified. Use 'original' or 'new'")
+            
+        logger.info(f"Prediction successful: letter={letter}, confidence={confidence}")
+        return {
+            "predicted_letter": letter,
+            "confidence": float(confidence)
+        }
+        
+    except Exception as e:
+        logger.error(f"Error in predict endpoint: {str(e)}")
+        if isinstance(e, HTTPException):
+            raise e
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

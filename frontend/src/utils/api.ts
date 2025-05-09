@@ -11,6 +11,7 @@ console.log('Using API URL:', API_URL);
 export const API_ENDPOINTS = {
   evaluateSign: `${API_URL}/evaluate-sign`,
   evaluateGPT4o: `${API_URL}/evaluate-gpt4o`,
+  predict: `${API_URL}/predict`,
   signDescription: `${API_URL}/sign-description`,
   debugImages: `${API_URL}/debug-images`,
   debugImage: (filename: string) => `${API_URL}/debug-image/${filename}`,

@@ -28,8 +28,8 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
 
   // Model options
   const modelOptions = [
-    { id: 'model1', name: 'CNN Model 1 (Current)' },
-    { id: 'model2', name: 'CNN Model 2 (Future)' },
+    { id: 'model1', name: 'CNN Model 1 (Original)' },
+    { id: 'model2', name: 'CNN Model 2 (New)' },
     { id: 'gpt4o', name: 'GPT-4 Vision (Best Performance)' }
   ];
 
@@ -143,6 +143,33 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
             result = await response.json();
           } catch (error) {
             console.error('Error calling GPT-4o API:', error);
+            setCameraError(`API error: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        } else if (selectedModel === 'model2') {
+          // Call new CNN model endpoint
+          const formData = new FormData();
+          formData.append('file', blob, 'webcam.jpg');
+          formData.append('model', 'new');
+          
+          try {
+            const response = await fetch(API_ENDPOINTS.predict, {
+              method: 'POST',
+              body: formData,
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const predictResult = await response.json();
+            result = {
+              success: true,
+              letter: predictResult.predicted_letter,
+              confidence: predictResult.confidence,
+              feedback: `Predicted letter ${predictResult.predicted_letter} with ${(predictResult.confidence * 100).toFixed(1)}% confidence`
+            };
+          } catch (error) {
+            console.error('Error calling new CNN model API:', error);
             setCameraError(`API error: ${error instanceof Error ? error.message : String(error)}`);
           }
         } else {
