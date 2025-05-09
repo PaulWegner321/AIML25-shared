@@ -4,6 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { API_ENDPOINTS } from '@/utils/api';
 import { SignEvaluationHandler } from '@/types/evaluation';
+import ReactMarkdown from 'react-markdown';
 
 interface FlashcardPromptProps {
   onSignCaptured: SignEvaluationHandler;
@@ -20,6 +21,7 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isClient, setIsClient] = useState(false);
+  const [latestFeedback, setLatestFeedback] = useState<string | null>(null);
 
   // Define all possible signs (A-Z)
   const allSigns = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)); // A-Z
@@ -121,79 +123,72 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
       stopCamera();
 
       if (blob) {
-        let result;
-        
-        // Handle different model types
-        if (selectedModel === 'gpt4o') {
-          // Call GPT-4o endpoint
-          const formData = new FormData();
-          formData.append('file', blob, 'webcam.jpg');
-          formData.append('expected_sign', currentSign);
-          
-          try {
-            const response = await fetch(API_ENDPOINTS.evaluateGPT4o, {
-              method: 'POST',
-              body: formData,
-            });
-            
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            result = await response.json();
-          } catch (error) {
-            console.error('Error calling GPT-4o API:', error);
-            setCameraError(`API error: ${error instanceof Error ? error.message : String(error)}`);
-          }
-        } else if (selectedModel === 'model2') {
+        let cnnResult;
+        try {
           // Call new CNN model endpoint
-          const formData = new FormData();
-          formData.append('file', blob, 'webcam.jpg');
-          formData.append('model', 'new');
+          const cnnFormData = new FormData();
+          cnnFormData.append('file', blob, 'webcam.jpg');
+          cnnFormData.append('model', 'new');
           
-          try {
-            const response = await fetch(API_ENDPOINTS.predict, {
-              method: 'POST',
-              body: formData,
-            });
-            
-            if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            
-            const predictResult = await response.json();
-            result = {
-              success: true,
-              letter: predictResult.predicted_letter,
-              confidence: predictResult.confidence,
-              feedback: `Predicted letter ${predictResult.predicted_letter} with ${(predictResult.confidence * 100).toFixed(1)}% confidence`
-            };
-          } catch (error) {
-            console.error('Error calling new CNN model API:', error);
-            setCameraError(`API error: ${error instanceof Error ? error.message : String(error)}`);
-          }
-        } else {
-          // Regular CNN model evaluation
-          const formData = new FormData();
-          formData.append('file', blob, 'webcam.jpg');
-          formData.append('model_id', selectedModel);
-          formData.append('model_type', 'image_processing');
-          formData.append('expected_sign', currentSign);
-          
-          const response = await fetch(API_ENDPOINTS.evaluateSign, {
+          const cnnResponse = await fetch(API_ENDPOINTS.predict, {
             method: 'POST',
-            body: formData,
+            body: cnnFormData,
           });
           
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+          if (!cnnResponse.ok) {
+            throw new Error(`HTTP error! status: ${cnnResponse.status}`);
           }
           
-          result = await response.json();
+          cnnResult = await cnnResponse.json();
+          const detectedLetter = cnnResult.predicted_letter;
+          const isCorrect = detectedLetter.toUpperCase() === currentSign.toUpperCase();
+          
+          // Get feedback from GPT-4 Vision
+          const feedbackFormData = new FormData();
+          feedbackFormData.append('file', blob, 'webcam.jpg');
+          feedbackFormData.append('expected_sign', currentSign);
+          feedbackFormData.append('detected_sign', detectedLetter);
+          feedbackFormData.append('is_correct', String(isCorrect));
+          
+          const feedbackResponse = await fetch(API_ENDPOINTS.getFeedback, {
+            method: 'POST',
+            body: feedbackFormData,
+          });
+          
+          if (!feedbackResponse.ok) {
+            throw new Error(`HTTP error! status: ${feedbackResponse.status}`);
+          }
+          
+          const feedbackResult = await feedbackResponse.json();
+          
+          // Only use the feedback from the model
+          const combinedResult = {
+            success: true,
+            letter: detectedLetter,
+            confidence: cnnResult.confidence,
+            feedback: feedbackResult.feedback // Only show the feedback, not CNN output
+          };
+          setLatestFeedback(feedbackResult.feedback);
+          // Call the parent component's callback with the combined result
+          onSignCaptured(imageData, currentSign, combinedResult);
+          
+        } catch (error) {
+          console.error('Error calling models:', error);
+          setCameraError(`API error: ${error instanceof Error ? error.message : String(error)}`);
+          
+          // If we have at least one successful result, use that
+          if (cnnResult) {
+            const fallbackResult = {
+              success: true,
+              letter: cnnResult.predicted_letter,
+              confidence: cnnResult.confidence,
+              feedback: `Predicted letter ${cnnResult.predicted_letter} with ${(cnnResult.confidence * 100).toFixed(1)}% confidence. (Detailed feedback unavailable)`
+            };
+            onSignCaptured(imageData, currentSign, fallbackResult);
+          } else {
+            throw error; // Re-throw if both models failed
+          }
         }
-        
-        // Call the parent component's callback with the result
-        onSignCaptured(imageData, currentSign, result);
       }
     } catch (error) {
       console.error('Error capturing sign:', error);
@@ -204,6 +199,7 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
   const handleTryAgain = () => {
     setCapturedImage(null);
     setCameraError(null);
+    setLatestFeedback(null);
     onCardChange();
     startCamera();
   };
@@ -212,6 +208,7 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
     const nextIndex = (currentSignIndex + 1) % allSigns.length;
     setCurrentSignIndex(nextIndex);
     setCapturedImage(null);
+    setLatestFeedback(null);
     onCardChange();
   };
 
@@ -219,6 +216,7 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
     const prevIndex = (currentSignIndex - 1 + allSigns.length) % allSigns.length;
     setCurrentSignIndex(prevIndex);
     setCapturedImage(null);
+    setLatestFeedback(null);
     onCardChange();
   };
 

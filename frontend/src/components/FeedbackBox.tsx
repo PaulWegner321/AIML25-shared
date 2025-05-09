@@ -1,3 +1,5 @@
+import ReactMarkdown from 'react-markdown';
+
 interface TooltipProps {
   text: string;
   children: React.ReactNode;
@@ -87,7 +89,9 @@ const FeedbackBox = ({ feedback, isCorrect, detectedLetter, confidence, expected
             <h3 className="text-sm font-medium mb-2">
               {isCorrect ? 'Analysis' : 'Improvement Feedback'}
             </h3>
-            <p className="font-medium">{feedback}</p>
+            <div className="prose prose-sm max-w-none">
+              <ReactMarkdown>{feedback}</ReactMarkdown>
+            </div>
           </div>
         </Tooltip>
       )}

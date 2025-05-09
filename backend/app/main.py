@@ -17,6 +17,7 @@ import logging
 from .models.keypoint_detector import HandDetector
 from .services.vision_evaluator import VisionEvaluator
 from .services.gpt4o_service import get_asl_prediction as gpt4o_predict
+from .services.feedback_service import get_sign_feedback
 from .models.new_cnn_model import NewCNNPredictor
 
 # Load environment variables
@@ -577,6 +578,66 @@ async def predict(file: UploadFile = File(...), model: str = "new"):
         if isinstance(e, HTTPException):
             raise e
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/get-feedback", response_model=SignEvaluationResponse)
+async def get_feedback(
+    file: UploadFile = File(...),
+    expected_sign: str = Form(...),
+    detected_sign: str = Form(...),
+    is_correct: bool = Form(...)
+):
+    """Endpoint for getting detailed feedback on sign performance using GPT-4 Vision"""
+    try:
+        # Read and decode image
+        contents = await file.read()
+        nparr = np.frombuffer(contents, np.uint8)
+        image = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        
+        if image is None:
+            raise HTTPException(status_code=400, detail="Invalid image file")
+        
+        # Save image temporarily
+        temp_dir = Path("temp_images")
+        temp_dir.mkdir(exist_ok=True)
+        timestamp = int(time.time())
+        temp_image_path = temp_dir / f"temp_image_{timestamp}.jpg"
+        cv2.imwrite(str(temp_image_path), image)
+        
+        try:
+            # Get feedback from GPT-4o
+            result = get_sign_feedback(
+                str(temp_image_path),
+                expected_sign,
+                detected_sign,
+                is_correct
+            )
+            
+            # Clean up temporary file
+            os.remove(temp_image_path)
+            
+            if not result["success"]:
+                return SignEvaluationResponse(
+                    success=False,
+                    error=result.get("error", "Failed to generate feedback")
+                )
+            
+            return SignEvaluationResponse(
+                success=True,
+                letter=detected_sign,
+                confidence=1.0 if is_correct else 0.0,
+                feedback=result["feedback"]
+            )
+            
+        finally:
+            # Ensure temp file is cleaned up even if there's an error
+            if os.path.exists(temp_image_path):
+                os.remove(temp_image_path)
+                
+    except Exception as e:
+        return SignEvaluationResponse(
+            success=False,
+            error=f"Server error: {str(e)}"
+        )
 
 if __name__ == "__main__":
     import uvicorn

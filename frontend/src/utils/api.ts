@@ -17,4 +17,5 @@ export const API_ENDPOINTS = {
   debugImage: (filename: string) => `${API_URL}/debug-image/${filename}`,
   diagnostic: `${API_URL}/diagnostic`,
   ping: `${API_URL}/ping`,
+  getFeedback: `${API_URL}/get-feedback`,
 }; 

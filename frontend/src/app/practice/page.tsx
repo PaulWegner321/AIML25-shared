@@ -39,7 +39,7 @@ export default function PracticePage() {
         
         // Custom feedback when the detected sign doesn't match the expected sign
         if (!isCorrect) {
-          const customFeedback = `The model detected that you signed "${letter}", but the expected sign was "${expectedSign}". ${feedback}`;
+          const customFeedback = `The model detected that you signed "${letter}", but the expected sign was "${expectedSign}".\n\n${feedback}`;
           setFeedback(customFeedback);
         } else {
           setFeedback(feedback);
