@@ -13,14 +13,15 @@ load_dotenv()
 # Get IBM Watson credentials
 WX_API_KEY = os.getenv("WATSONX_API_KEY")
 WX_PROJECT_ID = os.getenv("WATSONX_PROJECT_ID")
-WX_URL = os.getenv("WATSONX_URL")
+WX_URL = os.getenv("WATSONX_URL", "https://us-south.ml.cloud.ibm.com")
 
-if not WX_API_KEY:
-    raise ValueError("WATSONX_API_KEY not found in environment variables")
-if not WX_PROJECT_ID:
-    raise ValueError("WATSONX_PROJECT_ID not found in environment variables")
-if not WX_URL:
-    raise ValueError("WATSONX_URL not found in environment variables")
+# Flag to track if Watson is available
+watson_available = bool(WX_API_KEY and WX_PROJECT_ID and WX_URL)
+
+if not watson_available:
+    print("WARNING: IBM WatsonX credentials not found. Using fallback mode.")
+else:
+    print("IBM WatsonX credentials found. Using WatsonX for sign descriptions.")
 
 # ASL Sign Knowledge Base
 Sign_knowledge = {
@@ -132,48 +133,109 @@ def process_llm_response(text: str) -> Dict:
 
 class LLMService:
     def __init__(self):
-        # Setup Watson credentials
-        credentials = Credentials(
-            url=WX_URL,
-            api_key=WX_API_KEY
-        )
+        # Flag to track if Watson is available
+        self.watson_available = watson_available
         
-        self.client = APIClient(
-            credentials=credentials,
-            project_id=WX_PROJECT_ID
-        )
-        
-        # Setup model parameters
-        self.params = TextGenParameters(
-            temperature=0.05,
-            max_new_tokens=300
-        )
-        
-        # Initialize model
-        self.model = ModelInference(
-            api_client=self.client,
-            params=self.params,
-            model_id="mistralai/mistral-large"
-        )
+        if self.watson_available:
+            try:
+                # Setup Watson credentials
+                credentials = Credentials(
+                    url=WX_URL,
+                    api_key=WX_API_KEY
+                )
+                
+                self.client = APIClient(
+                    credentials=credentials,
+                    project_id=WX_PROJECT_ID
+                )
+                
+                # Setup model parameters
+                self.params = TextGenParameters(
+                    temperature=0.05,
+                    max_new_tokens=300
+                )
+                
+                # Initialize model
+                self.model = ModelInference(
+                    api_client=self.client,
+                    params=self.params,
+                    model_id="mistralai/mistral-large"
+                )
+                print("Successfully initialized WatsonX connection")
+            except Exception as e:
+                print(f"Error initializing WatsonX: {e}")
+                self.watson_available = False
+        else:
+            print("Using static sign descriptions (fallback mode)")
 
     async def lookup_sign(self, request: SignRequest) -> SignResponse:
+        sign_name = request.sign_name.upper()
+        
         try:
-            # Generate response
-            prompt = create_prompt(request.sign_name)
-            response = self.model.generate(prompt=prompt)
-            generated_text = response['results'][0]['generated_text']
+            # Check if we have a static definition for this sign
+            sign_details = Sign_knowledge.get(sign_name)
             
-            # Process the response into structured format
-            processed_response = process_llm_response(generated_text)
+            if not sign_details:
+                return SignResponse(
+                    word=sign_name,
+                    description=f"Description for sign '{sign_name}' not found.",
+                    steps=["1. Check that you've entered a valid ASL letter sign (A-Z)."],
+                    tips=["Try looking up a different letter."]
+                )
             
-            return SignResponse(
-                word=request.sign_name.upper(),
-                description=processed_response["description"],
-                steps=processed_response["steps"],
-                tips=processed_response["tips"]
-            )
+            if self.watson_available:
+                try:
+                    # Generate response using WatsonX
+                    prompt = create_prompt(sign_name)
+                    response = self.model.generate(prompt=prompt)
+                    generated_text = response['results'][0]['generated_text']
+                    
+                    # Process the response into structured format
+                    processed_response = process_llm_response(generated_text)
+                    
+                    return SignResponse(
+                        word=sign_name,
+                        description=processed_response["description"],
+                        steps=processed_response["steps"],
+                        tips=processed_response["tips"]
+                    )
+                except Exception as e:
+                    print(f"WatsonX error: {e}. Falling back to static description.")
+                    # Fall back to static description if WatsonX fails
+            
+            # Fallback to static descriptions
+            return self._create_static_response(sign_name, sign_details)
+            
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
+            
+    def _create_static_response(self, sign_name: str, sign_details: str) -> SignResponse:
+        """Create a structured response from static sign description."""
+        # Parse the static knowledge into usable format
+        parts = sign_details.split('. ')
+        
+        # Extract basic components for a simple structured response
+        description = f"The sign for letter '{sign_name}' in American Sign Language."
+        
+        # Create simple step-by-step instructions from the knowledge base
+        steps = [
+            f"1. Position your hand as follows: {parts[0]}",
+            f"2. Make sure your {parts[1] if len(parts) > 1 else 'hand is in the correct position'}",
+            f"3. Keep your {parts[2] if len(parts) > 2 else 'fingers properly aligned'}"
+        ]
+        
+        # Standard tips
+        tips = [
+            f"Practice in front of a mirror to check your form",
+            f"The sign for '{sign_name}' should be clear and deliberate"
+        ]
+        
+        return SignResponse(
+            word=sign_name,
+            description=description,
+            steps=steps,
+            tips=tips
+        )
 
 # Create a singleton instance
 llm_service = LLMService() 

@@ -35,5 +35,11 @@ services:
         value: production
       - key: LOG_LEVEL
         value: debug
+      - key: WATSONX_API_KEY
+        sync: false  # This will be set manually in the Render dashboard
+      - key: WATSONX_PROJECT_ID
+        sync: false  # This will be set manually in the Render dashboard
+      - key: WATSONX_URL
+        value: "https://us-south.ml.cloud.ibm.com"
     healthCheckPath: /health
     autoDeploy: true 
