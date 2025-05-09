@@ -90,12 +90,12 @@ const DiagnosticPage = () => {
                   <h3 className="font-medium mb-2">Raw Image (Original)</h3>
                   <div className="relative w-full h-48 border border-gray-300 rounded-lg">
                     <Image 
-                      src={API_ENDPOINTS.debugImage(diagnostic.images.raw.split('/').pop() || '')} 
-                      alt="Raw input"
+                    src={API_ENDPOINTS.debugImage(diagnostic.images.raw.split('/').pop() || '')} 
+                    alt="Raw input" 
                       fill
                       className="object-contain"
                       sizes="(max-width: 768px) 100vw, 33vw"
-                    />
+                  />
                   </div>
                 </div>
                 
@@ -104,12 +104,12 @@ const DiagnosticPage = () => {
                     <h3 className="font-medium mb-2">Grayscale Image</h3>
                     <div className="relative w-full h-48 border border-gray-300 rounded-lg">
                       <Image 
-                        src={API_ENDPOINTS.debugImage(diagnostic.images.grayscale.split('/').pop() || '')} 
-                        alt="Grayscale"
+                      src={API_ENDPOINTS.debugImage(diagnostic.images.grayscale.split('/').pop() || '')} 
+                      alt="Grayscale" 
                         fill
                         className="object-contain"
                         sizes="(max-width: 768px) 100vw, 33vw"
-                      />
+                    />
                     </div>
                   </div>
                 )}
@@ -119,12 +119,12 @@ const DiagnosticPage = () => {
                     <h3 className="font-medium mb-2">API Input Image</h3>
                     <div className="relative w-full h-48 border border-gray-300 rounded-lg">
                       <Image 
-                        src={API_ENDPOINTS.debugImage(diagnostic.images.api_input.split('/').pop() || '')} 
-                        alt="API input"
+                      src={API_ENDPOINTS.debugImage(diagnostic.images.api_input.split('/').pop() || '')} 
+                      alt="API input" 
                         fill
                         className="object-contain"
                         sizes="(max-width: 768px) 100vw, 33vw"
-                      />
+                    />
                     </div>
                   </div>
                 )}
@@ -162,12 +162,12 @@ const DiagnosticPage = () => {
               >
                 <div className="relative w-full h-48">
                   <Image 
-                    src={API_ENDPOINTS.debugImage(image.filename)} 
-                    alt={image.filename} 
+                  src={API_ENDPOINTS.debugImage(image.filename)} 
+                  alt={image.filename} 
                     fill
                     className="object-cover"
                     sizes="(max-width: 768px) 50vw, 25vw"
-                  />
+                />
                 </div>
                 <div className="p-2 text-xs">
                   <p className="truncate">{image.filename}</p>
@@ -193,12 +193,12 @@ const DiagnosticPage = () => {
             </div>
             <div className="relative w-full h-[70vh]">
               <Image 
-                src={API_ENDPOINTS.debugImage(selectedImage)} 
-                alt={selectedImage}
+              src={API_ENDPOINTS.debugImage(selectedImage)} 
+              alt={selectedImage} 
                 fill 
                 className="object-contain"
                 sizes="(max-width: 1280px) 100vw, 1280px"
-              />
+            />
             </div>
           </div>
         </div>

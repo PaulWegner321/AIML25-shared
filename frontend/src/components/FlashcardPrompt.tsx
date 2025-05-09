@@ -55,17 +55,17 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
 
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { 
           width: { ideal: 640 },
           height: { ideal: 480 },
           facingMode: 'user'
-        }
+        } 
       });
-
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        setIsCameraActive(true);
+          setIsCameraActive(true);
         setCameraError(null);
       }
     } catch (error) {
@@ -76,9 +76,9 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
 
   const stopCamera = () => {
     if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
+        const stream = videoRef.current.srcObject as MediaStream;
       stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
+        videoRef.current.srcObject = null;
       setIsCameraActive(false);
     }
   };
@@ -110,8 +110,8 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
         canvas.toBlob((b) => {
           if (b) resolve(b);
         }, 'image/jpeg', 0.95);
-      });
-
+              });
+              
       // Get image data for display
       const imageData = canvas.toDataURL('image/jpeg');
       setCapturedImage(imageData);
@@ -120,21 +120,21 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
       if (blob) {
         try {
           // Use the new evaluation endpoint that uses CNN → GPT-4V → Mistral pipeline
-          const formData = new FormData();
-          formData.append('file', blob, 'webcam.jpg');
-          formData.append('expected_sign', currentSign);
-          
+            const formData = new FormData();
+            formData.append('file', blob, 'webcam.jpg');
+            formData.append('expected_sign', currentSign);
+            
           const response = await fetch(API_ENDPOINTS.evaluate, {
-            method: 'POST',
-            body: formData,
-          });
-          
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          
+              method: 'POST',
+              body: formData,
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
           const result = await response.json();
-          
+
           if (result.success) {
             const combinedResult = {
               success: true,
@@ -212,28 +212,28 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
       <div className="relative w-full h-96 bg-gray-100 rounded-lg overflow-hidden mb-4">
         {isInitialized ? (
           <>
-            {capturedImage ? (
-              <Image
-                src={capturedImage}
-                alt="Captured sign"
-                fill
-                className="object-cover"
+        {capturedImage ? (
+          <Image
+            src={capturedImage}
+            alt="Captured sign"
+            fill
+            className="object-cover"
                 sizes="(max-width: 768px) 100vw, 50vw"
-              />
+          />
             ) : (
-              <>
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  controls={false}
-                  className={`w-full h-full object-cover ${isCameraActive ? '' : 'hidden'}`}
-                />
-                {!isCameraActive && (
-                  <div className="flex items-center justify-center h-full">
-                    <p className="text-gray-500">Camera is off</p>
-                  </div>
+          <>
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              controls={false}
+              className={`w-full h-full object-cover ${isCameraActive ? '' : 'hidden'}`}
+            />
+            {!isCameraActive && (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-gray-500">Camera is off</p>
+              </div>
                 )}
               </>
             )}
@@ -303,4 +303,4 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
   );
 };
 
-export default FlashcardPrompt;
+export default FlashcardPrompt; 

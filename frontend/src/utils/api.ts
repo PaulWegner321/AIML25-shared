@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
   evaluate: `${API_BASE}/evaluate`,  // New endpoint for CNN → GPT-4V → Mistral pipeline
   predict: `${API_BASE}/predict`,
   signDescription: `${API_BASE}/sign-description`,
+  chat: `${API_BASE}/chat`,  // New endpoint for interactive ASL chat
   debugImages: `${API_BASE}/debug-images`,
   debugImage: (filename: string) => `${API_BASE}/debug-image/${filename}`,
   diagnostic: `${API_BASE}/diagnostic`,

@@ -19,7 +19,7 @@ from .services.vision_evaluator import VisionEvaluator
 from .services.gpt4o_service import get_asl_prediction
 from .services.feedback_service import get_sign_feedback
 from .models.new_cnn_model import NewCNNPredictor
-from .services.llm_service import llm_service, SignRequest
+from .services.llm_service import llm_service, SignRequest, ChatRequest, ChatResponse
 from .services.mistral_feedback_service import mistral_feedback_service
 
 # Load environment variables
@@ -674,6 +674,15 @@ async def get_sign_description(request: SignDescriptionRequest):
     # Convert the request to match the llm_service interface
     llm_request = SignRequest(sign_name=request.word)
     return await llm_service.lookup_sign(llm_request)
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat_endpoint(request: ChatRequest):
+    """Endpoint for interactive chat about ASL signs"""
+    try:
+        return await llm_service.chat(request)
+    except Exception as e:
+        print(f"Error in chat endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/health")
 async def health_check():

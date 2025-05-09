@@ -3,9 +3,11 @@ from pydantic import BaseModel
 from ibm_watsonx_ai import Credentials, APIClient
 from ibm_watsonx_ai.foundation_models import ModelInference
 from ibm_watsonx_ai.foundation_models.schema import TextGenParameters
-from typing import Dict, List
+from typing import Dict, List, Optional
 import os
 from dotenv import load_dotenv
+import uuid
+import time
 
 # Load environment variables
 load_dotenv()
@@ -61,6 +63,19 @@ class SignResponse(BaseModel):
     description: str
     steps: List[str]
     tips: List[str]
+
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+class ChatRequest(BaseModel):
+    sign_name: str
+    message: str
+    session_id: Optional[str] = None
+
+class ChatResponse(BaseModel):
+    response: str
+    session_id: str
 
 def create_prompt(sign_name: str) -> str:
 
@@ -135,6 +150,12 @@ class LLMService:
     def __init__(self):
         # Flag to track if Watson is available
         self.watson_available = watson_available
+        # Store chat sessions
+        self.chat_sessions = {}
+        # Session expiry time (2 hours in seconds)
+        self.session_expiry = 7200
+        # Clean expired sessions periodically
+        self.last_cleanup = time.time()
         
         if self.watson_available:
             try:
@@ -167,6 +188,24 @@ class LLMService:
                 self.watson_available = False
         else:
             print("Using static sign descriptions (fallback mode)")
+
+    def _clean_expired_sessions(self):
+        """Clean expired chat sessions to prevent memory leaks"""
+        current_time = time.time()
+        # Only clean every 10 minutes
+        if current_time - self.last_cleanup < 600:
+            return
+            
+        expired_sessions = []
+        for session_id, session_data in self.chat_sessions.items():
+            if current_time - session_data["last_access"] > self.session_expiry:
+                expired_sessions.append(session_id)
+                
+        for session_id in expired_sessions:
+            del self.chat_sessions[session_id]
+            
+        self.last_cleanup = current_time
+        print(f"Cleaned {len(expired_sessions)} expired chat sessions. Active sessions: {len(self.chat_sessions)}")
 
     async def lookup_sign(self, request: SignRequest) -> SignResponse:
         sign_name = request.sign_name.upper()
@@ -236,6 +275,140 @@ class LLMService:
             steps=steps,
             tips=tips
         )
+
+    async def chat(self, request: ChatRequest) -> ChatResponse:
+        """Handle chat interactions about a specific ASL sign"""
+        self._clean_expired_sessions()
+        
+        sign_name = request.sign_name.upper()
+        user_message = request.message
+        session_id = request.session_id or str(uuid.uuid4())
+        
+        # Get or create chat history
+        if session_id not in self.chat_sessions:
+            # Get sign details
+            sign_details = Sign_knowledge.get(sign_name, "Unknown sign")
+            
+            # Format initial context with sign details 
+            system_context = (
+                f"You are an ASL tutor helping with the sign for the letter '{sign_name}'. "
+                f"Reference information: {sign_details} "
+                f"Be friendly, helpful and concise in your responses. Focus on teaching the correct ASL finger positions."
+            )
+            
+            # Initialize session with system message and timestamp
+            self.chat_sessions[session_id] = {
+                "messages": [{"role": "system", "content": system_context}],
+                "sign_name": sign_name, 
+                "last_access": time.time()
+            }
+            
+            # If this is a new session, provide initial greeting
+            if not request.message or request.message.strip() == "":
+                greeting = (
+                    f"Hi! I'm your ASL tutor for the letter '{sign_name}'. "
+                    f"You can ask me questions about how to form this sign, common mistakes to avoid, "
+                    f"or request more detailed explanations for any aspect of the sign."
+                )
+                self.chat_sessions[session_id]["messages"].append({"role": "assistant", "content": greeting})
+                return ChatResponse(response=greeting, session_id=session_id)
+        
+        # Update session access time
+        self.chat_sessions[session_id]["last_access"] = time.time()
+        
+        # Add user message to history
+        self.chat_sessions[session_id]["messages"].append({"role": "user", "content": user_message})
+        
+        # Get response using WatsonX or fallback
+        if self.watson_available:
+            try:
+                # Format chat history for prompt
+                chat_history = "\n".join([
+                    f"{msg['role']}: {msg['content']}" 
+                    for msg in self.chat_sessions[session_id]["messages"]
+                ])
+                
+                prompt = f"""
+                You are an interactive ASL tutor specialized in teaching American Sign Language.
+                
+                Current sign being discussed: {sign_name}
+                
+                Previous conversation:
+                {chat_history}
+                
+                Respond to the user's latest question with helpful, clear information about ASL.
+                Keep your response concise (15-40 words) and informative, focusing specifically on what was asked.
+                Do not use phrases like "I would say" or "Your response should be" - just provide the direct answer.
+                Do not start with "assistant:" or similar prefixes.
+                """
+                
+                response = self.model.generate(prompt=prompt)
+                assistant_response = response['results'][0]['generated_text'].strip()
+                
+                # Clean up response if needed
+                if assistant_response.startswith("assistant:"):
+                    assistant_response = assistant_response[10:].strip()
+                
+                # Remove any instructions or meta text that might be included
+                common_prefixes = [
+                    "your response should be",
+                    "the answer is",
+                    "i would say",
+                    "in response to your question",
+                    "to answer your question",
+                ]
+                
+                for prefix in common_prefixes:
+                    if assistant_response.lower().startswith(prefix):
+                        assistant_response = assistant_response[len(prefix):].strip()
+                
+                # Remove period at end if there's a second sentence starting point
+                parts = assistant_response.split('. ', 1)
+                if len(parts) > 1 and len(parts[0]) < 50:
+                    assistant_response = parts[0].strip()
+
+            except Exception as e:
+                print(f"WatsonX chat error: {e}")
+                assistant_response = self._generate_simple_response(user_message, sign_name)
+        else:
+            # Simple fallback for non-Watson mode
+            assistant_response = self._generate_simple_response(user_message, sign_name)
+        
+        # Store assistant's response
+        self.chat_sessions[session_id]["messages"].append({"role": "assistant", "content": assistant_response})
+        
+        return ChatResponse(
+            response=assistant_response,
+            session_id=session_id
+        )
+    
+    def _generate_simple_response(self, message, sign_name):
+        """Generate a simple rule-based response for fallback mode"""
+        message_lower = message.lower()
+        sign_details = Sign_knowledge.get(sign_name, "")
+        parts = sign_details.split('. ', 2)  # Split into up to 3 parts
+        
+        # Check for common question patterns
+        if any(word in message_lower for word in ["how", "form", "make", "do"]):
+            return f"{parts[0]}."
+            
+        elif any(word in message_lower for word in ["difficult", "hard", "challenge"]):
+            return f"The sign for '{sign_name}' is straightforward with practice. Focus on proper finger positioning and hand orientation."
+            
+        elif any(phrase in message_lower for phrase in ["common mistake", "error", "wrong", "incorrect"]):
+            return f"Common mistakes include incorrect finger positioning or hand orientation. Make sure your {parts[0].lower()}."
+            
+        elif any(word in message_lower for word in ["compare", "difference", "similar", "versus", "vs"]):
+            return f"The sign '{sign_name}' is distinct in its finger positioning. The key feature is {parts[0].lower()}."
+            
+        elif any(word in message_lower for word in ["practice", "exercise", "improve", "better"]):
+            return f"Practice in front of a mirror. Focus on {parts[0].lower()}."
+            
+        elif any(word in message_lower for word in ["thank", "thanks", "appreciate"]):
+            return f"You're welcome! Happy to help with the '{sign_name}' sign."
+            
+        else:
+            return f"For the '{sign_name}' sign: {parts[0]}. What else would you like to know?"
 
 # Create a singleton instance
 llm_service = LLMService() 

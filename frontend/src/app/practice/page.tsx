@@ -12,7 +12,7 @@ export default function PracticePage() {
   const [detectedLetter, setDetectedLetter] = useState<string | null>(null);
   const [confidence, setConfidence] = useState<number | null>(null);
   const [expectedLetter, setExpectedLetter] = useState<string | null>(null);
-  
+
   const handleSignEvaluation: SignEvaluationHandler = async (imageData, expectedSign, result) => {
     try {
       console.log('Processing evaluation result:', result);
