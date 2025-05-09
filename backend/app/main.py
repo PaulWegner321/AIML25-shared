@@ -92,11 +92,32 @@ logger = logging.getLogger(__name__)
 async def startup_event():
     """Initialize models and services on startup."""
     try:
-        # Load new CNN model
-        new_model_path = os.path.join(os.path.dirname(__file__), "models", "weights", "new_cnn_model.pth")
-        new_cnn_predictor.load_model(new_model_path)
+        # Try to load the new CNN model from various possible locations
+        model_paths = [
+            os.path.join(os.path.dirname(__file__), "models", "weights", "new_cnn_model.pth"),
+            os.path.join(os.path.dirname(__file__), "models", "weights", "cnn_model.pth"),
+            os.path.join(os.path.dirname(__file__), "asl_cnn_weights.pth")
+        ]
+        
+        model_loaded = False
+        for model_path in model_paths:
+            try:
+                print(f"Attempting to load model from: {model_path}")
+                if os.path.exists(model_path):
+                    new_cnn_predictor.load_model(model_path)
+                    print(f"Successfully loaded model from: {model_path}")
+                    model_loaded = True
+                    break
+                else:
+                    print(f"Model file not found at: {model_path}")
+            except Exception as model_error:
+                print(f"Error loading model from {model_path}: {model_error}")
+                continue
+        
+        if not model_loaded:
+            print("WARNING: Could not load any CNN model - sign detection will not work correctly")
     except Exception as e:
-        print(f"Error loading models: {e}")
+        print(f"Error during startup: {e}")
 
 @app.get("/")
 async def root():
@@ -653,6 +674,27 @@ async def get_sign_description(request: SignDescriptionRequest):
     # Convert the request to match the llm_service interface
     llm_request = SignRequest(sign_name=request.word)
     return await llm_service.lookup_sign(llm_request)
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Render"""
+    try:
+        # Check if CNN model is loaded
+        model_status = "loaded" if new_cnn_predictor.model is not None else "not loaded"
+        
+        return {
+            "status": "healthy",
+            "environment": ENVIRONMENT,
+            "timestamp": datetime.datetime.now().isoformat(),
+            "models": {
+                "cnn_model": model_status
+            }
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e)
+        }
 
 if __name__ == "__main__":
     import uvicorn

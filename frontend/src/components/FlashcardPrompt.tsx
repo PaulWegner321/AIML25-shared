@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import Image from 'next/image';
 import { API_ENDPOINTS } from '@/utils/api';
 import { SignEvaluationHandler } from '@/types/evaluation';
-import ReactMarkdown from 'react-markdown';
+import Image from 'next/image';
 
 interface FlashcardPromptProps {
   onSignCaptured: SignEvaluationHandler;
@@ -20,8 +19,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
   const [selectedModel, setSelectedModel] = useState('model2');
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [isClient, setIsClient] = useState(false);
-  const [latestFeedback, setLatestFeedback] = useState<string | null>(null);
 
   // Define all possible signs (A-Z)
   const allSigns = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)); // A-Z
@@ -36,7 +33,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
 
   // Initialize component
   useEffect(() => {
-    setIsClient(true);
     setIsInitialized(true);
     return () => {
       stopCamera();
@@ -147,7 +143,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
               feedback: `${result.description}\n\nSteps to improve:\n${result.steps.join('\n')}\n\nTips:\n${result.tips.join('\n')}` // Use all the structured feedback
             };
             
-            setLatestFeedback(combinedResult.feedback);
             onSignCaptured(imageData, currentSign, combinedResult);
           } else {
             throw new Error(result.error || 'Failed to evaluate sign');
@@ -167,7 +162,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
   const handleTryAgain = () => {
     setCapturedImage(null);
     setCameraError(null);
-    setLatestFeedback(null);
     onCardChange();
     startCamera();
   };
@@ -176,7 +170,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
     const nextIndex = (currentSignIndex + 1) % allSigns.length;
     setCurrentSignIndex(nextIndex);
     setCapturedImage(null);
-    setLatestFeedback(null);
     onCardChange();
   };
 
@@ -184,7 +177,6 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
     const prevIndex = (currentSignIndex - 1 + allSigns.length) % allSigns.length;
     setCurrentSignIndex(prevIndex);
     setCapturedImage(null);
-    setLatestFeedback(null);
     onCardChange();
   };
 
@@ -221,10 +213,12 @@ const FlashcardPrompt = ({ onSignCaptured, onCardChange }: FlashcardPromptProps)
         {isInitialized ? (
           <>
             {capturedImage ? (
-              <img
+              <Image
                 src={capturedImage}
                 alt="Captured sign"
-                className="w-full h-full object-cover"
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 50vw"
               />
             ) : (
               <>

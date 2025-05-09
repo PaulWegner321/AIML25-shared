@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { API_ENDPOINTS } from '@/utils/api';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface DebugImage {
   filename: string;
@@ -18,7 +19,7 @@ interface DiagnosticData {
     grayscale: string | null;
     api_input: string | null;
   };
-  api_response?: any;
+  api_response?: Record<string, unknown>;
   message?: string;
 }
 
@@ -87,32 +88,44 @@ const DiagnosticPage = () => {
               <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <h3 className="font-medium mb-2">Raw Image (Original)</h3>
-                  <img 
-                    src={API_ENDPOINTS.debugImage(diagnostic.images.raw.split('/').pop() || '')} 
-                    alt="Raw input" 
-                    className="w-full h-auto border border-gray-300 rounded-lg"
-                  />
+                  <div className="relative w-full h-48 border border-gray-300 rounded-lg">
+                    <Image 
+                      src={API_ENDPOINTS.debugImage(diagnostic.images.raw.split('/').pop() || '')} 
+                      alt="Raw input"
+                      fill
+                      className="object-contain"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                    />
+                  </div>
                 </div>
                 
                 {diagnostic.images.grayscale && (
                   <div>
                     <h3 className="font-medium mb-2">Grayscale Image</h3>
-                    <img 
-                      src={API_ENDPOINTS.debugImage(diagnostic.images.grayscale.split('/').pop() || '')} 
-                      alt="Grayscale" 
-                      className="w-full h-auto border border-gray-300 rounded-lg"
-                    />
+                    <div className="relative w-full h-48 border border-gray-300 rounded-lg">
+                      <Image 
+                        src={API_ENDPOINTS.debugImage(diagnostic.images.grayscale.split('/').pop() || '')} 
+                        alt="Grayscale"
+                        fill
+                        className="object-contain"
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                      />
+                    </div>
                   </div>
                 )}
                 
                 {diagnostic.images.api_input && (
                   <div>
                     <h3 className="font-medium mb-2">API Input Image</h3>
-                    <img 
-                      src={API_ENDPOINTS.debugImage(diagnostic.images.api_input.split('/').pop() || '')} 
-                      alt="API input" 
-                      className="w-full h-auto border border-gray-300 rounded-lg"
-                    />
+                    <div className="relative w-full h-48 border border-gray-300 rounded-lg">
+                      <Image 
+                        src={API_ENDPOINTS.debugImage(diagnostic.images.api_input.split('/').pop() || '')} 
+                        alt="API input"
+                        fill
+                        className="object-contain"
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -147,11 +160,15 @@ const DiagnosticPage = () => {
                 className="border border-gray-300 rounded-lg overflow-hidden cursor-pointer hover:border-blue-500"
                 onClick={() => setSelectedImage(image.filename)}
               >
-                <img 
-                  src={API_ENDPOINTS.debugImage(image.filename)} 
-                  alt={image.filename} 
-                  className="w-full h-48 object-cover"
-                />
+                <div className="relative w-full h-48">
+                  <Image 
+                    src={API_ENDPOINTS.debugImage(image.filename)} 
+                    alt={image.filename} 
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 50vw, 25vw"
+                  />
+                </div>
                 <div className="p-2 text-xs">
                   <p className="truncate">{image.filename}</p>
                   <p className="text-gray-500">{formatTimestamp(image.timestamp)}</p>
@@ -174,11 +191,15 @@ const DiagnosticPage = () => {
                 Close
               </button>
             </div>
-            <img 
-              src={API_ENDPOINTS.debugImage(selectedImage)} 
-              alt={selectedImage} 
-              className="w-full h-auto max-h-[70vh] object-contain"
-            />
+            <div className="relative w-full h-[70vh]">
+              <Image 
+                src={API_ENDPOINTS.debugImage(selectedImage)} 
+                alt={selectedImage}
+                fill 
+                className="object-contain"
+                sizes="(max-width: 1280px) 100vw, 1280px"
+              />
+            </div>
           </div>
         </div>
       )}

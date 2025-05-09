@@ -5,7 +5,6 @@ import FlashcardPrompt from '@/components/FlashcardPrompt';
 import FeedbackBox from '@/components/FeedbackBox';
 import { SignEvaluationHandler } from '@/types/evaluation';
 import Link from 'next/link';
-import { API_ENDPOINTS } from '@/utils/api';
 
 export default function PracticePage() {
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -13,18 +12,7 @@ export default function PracticePage() {
   const [detectedLetter, setDetectedLetter] = useState<string | null>(null);
   const [confidence, setConfidence] = useState<number | null>(null);
   const [expectedLetter, setExpectedLetter] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [selectedLetter, setSelectedLetter] = useState<string | null>(null);
-  const [prediction, setPrediction] = useState<{
-    letter: string | null;
-    confidence: number | null;
-    description: string | null;
-    steps: string[] | null;
-    tips: string[] | null;
-  } | null>(null);
-
+  
   const handleSignEvaluation: SignEvaluationHandler = async (imageData, expectedSign, result) => {
     try {
       console.log('Processing evaluation result:', result);
@@ -90,54 +78,6 @@ export default function PracticePage() {
     setConfidence(null);
     setExpectedLetter(null);
     console.log('Card changed, clearing feedback and state');
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-
-    if (!imageFile || !selectedLetter) {
-      setError('Please select an image and a letter');
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      // First get the prediction
-      const formData = new FormData();
-      formData.append('file', imageFile);
-      formData.append('expected_sign', selectedLetter);
-
-      // Use the new evaluation endpoint that uses CNN → GPT-4V → Mistral pipeline
-      const response = await fetch(API_ENDPOINTS.evaluate, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to evaluate sign');
-      }
-
-      const result = await response.json();
-      
-      if (result.success) {
-        setPrediction({
-          letter: result.letter,
-          confidence: result.confidence,
-          description: result.description,
-          steps: result.steps,
-          tips: result.tips
-        });
-      } else {
-        setError(result.error || 'Failed to evaluate sign');
-      }
-    } catch (err) {
-      console.error('Error:', err);
-      setError('Failed to process image');
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   return (

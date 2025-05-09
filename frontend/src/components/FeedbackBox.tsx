@@ -1,5 +1,3 @@
-import ReactMarkdown from 'react-markdown';
-
 interface TooltipProps {
   text: string;
   children: React.ReactNode;
