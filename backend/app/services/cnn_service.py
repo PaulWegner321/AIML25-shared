@@ -6,6 +6,7 @@ from PIL import Image
 import torchvision.transforms as transforms
 from typing import Dict, Any
 import logging
+from ..models.cnn_model import ASLCNNModel
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -36,11 +37,17 @@ class CNNPredictor:
     def load_model(self, model_path: str):
         """Load the CNN model from the specified path."""
         try:
-            # TODO: Replace with your actual model architecture
-            # self.model = YourModelClass()
-            # self.model.load_state_dict(torch.load(model_path, map_location=self.device))
-            # self.model.to(self.device)
-            # self.model.eval()
+            # Initialize the model
+            self.model = ASLCNNModel()
+            
+            # Load the state dict
+            state_dict = torch.load(model_path, map_location=self.device)
+            self.model.load_state_dict(state_dict)
+            
+            # Move model to device and set to eval mode
+            self.model.to(self.device)
+            self.model.eval()
+            
             logger.info(f"Model loaded successfully from {model_path}")
         except Exception as e:
             logger.error(f"Error loading model: {e}")
