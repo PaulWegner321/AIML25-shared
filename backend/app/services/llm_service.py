@@ -67,41 +67,58 @@ def create_prompt(sign_name: str) -> str:
 
     return (
        f"You are an American Sign Language (ASL) teacher.\n\n"
-        f"Please clearly explain how to perform the ASL sign on a beginner level for the letter '{sign_name}'. "
-        f"Use simple language and full sentences. Do not assume any prior knowledge about ASL.\n\n"
-        f"Here is relevant information for the letter '{sign_name}':\n"
+        f"Please explain how to perform the ASL sign for the letter '{sign_name}' in this exact format:\n\n"
+        f"First write a brief description of the overall sign.\n\n"
+        f"Then list the steps, with each step on a new line starting with a number:\n"
+        f"1. First step\n"
+        f"2. Second step\n"
+        f"etc.\n\n"
+        f"Finally, provide 1-2 specific tips for performing this sign correctly, each on a new line starting with a bullet point (-).\n\n"
+        f"Do not use any markdown formatting (no **, *, or other special characters).\n\n"
+        f"Here is the reference information for the letter '{sign_name}':\n"
         f"{sign_details}\n\n"
-        f"Here you can find one example for the word 'all':\n"
-        f"'Begin with both hands in front of you. Your non-dominant hand should be closer to you and be oriented towards yourself. Your dominant hand should be oriented away from yourself. Rotate your dominant hand so that its palm is oriented toward yourself and then rest the back of your dominant hand against the palm of your non-dominant hand'"
-        f"Only output the explanation. Do not include any other text. If appropriate, use less tokens than available.\n\n"
-        f"If you cant generate a description based on the relevant information, output:  'Sorry, I cant help your with this sign' \n\n"
+        f"Keep your response clear and beginner-friendly. If you cannot generate a description, output: 'Sorry, I cannot help with this sign'\n\n"
     )
 
 def process_llm_response(text: str) -> Dict:
     """Process the LLM response into structured format."""
-    # Split the response into sections based on common patterns
-    sections = text.split('\n\n')
+    # Split the response into sections based on empty lines
+    sections = [s.strip() for s in text.split('\n\n') if s.strip()]
     
     # Initialize with defaults
     description = ""
     steps = []
     tips = []
     
+    # Process each section
     for section in sections:
-        if section.lower().startswith('step') or section.strip()[0].isdigit():
-            # This looks like a step
-            steps.append(section.strip())
-        elif section.lower().startswith('tip') or 'tip:' in section.lower():
-            # This looks like a tip
-            tips.append(section.strip())
+        lines = [line.strip() for line in section.split('\n') if line.strip()]
+        
+        # Skip section headers (Description, Steps, Tips)
+        if len(lines) == 1 and (lines[0].lower() in ['description', 'steps', 'tips']):
+            continue
+            
+        # If any line starts with a number, this is the steps section
+        if any(line[0].isdigit() for line in lines):
+            for line in lines:
+                if line[0].isdigit():
+                    # Remove any duplicate numbering (e.g., "1. 1." or "1.1.")
+                    # First, remove the initial number and any dots/spaces
+                    cleaned_step = line.lstrip('0123456789. ')
+                    # Then remove any remaining numbers at the start
+                    cleaned_step = cleaned_step.lstrip('0123456789. ')
+                    steps.append(f"{len(steps) + 1}. {cleaned_step}")
+        # If any line starts with a dash or bullet point, these are tips
+        elif any(line.startswith('-') or line.startswith('•') for line in lines):
+            tips.extend(line.lstrip('-•').strip() for line in lines if line.startswith('-') or line.startswith('•'))
+        # Otherwise, this is part of the description
         else:
-            # Add to description if it's not empty
-            if section.strip():
-                description = description + "\n" + section.strip() if description else section.strip()
-    
-    # If no steps were found, try to create them from the description
-    if not steps and description:
-        steps = [f"Step {i+1}: {step.strip()}" for i, step in enumerate(description.split('. ')) if step.strip()]
+            # Remove any markdown formatting
+            clean_text = ' '.join(lines).replace('**', '').replace('*', '')
+            if description:
+                description += "\n" + clean_text
+            else:
+                description = clean_text
     
     # If no tips were found, add a general tip
     if not tips:

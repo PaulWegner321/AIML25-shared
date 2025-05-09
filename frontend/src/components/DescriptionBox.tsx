@@ -19,11 +19,11 @@ const DescriptionBox = ({ description }: DescriptionBoxProps) => {
 
       <div className="mb-6">
         <h3 className="text-lg font-medium mb-2">Steps</h3>
-        <ol className="list-decimal list-inside space-y-2 text-gray-700">
+        <div className="space-y-2 text-gray-700">
           {description.steps.map((step, index) => (
-            <li key={index}>{step}</li>
+            <p key={index} className="ml-4">{step}</p>
           ))}
-        </ol>
+        </div>
       </div>
 
       <div>
