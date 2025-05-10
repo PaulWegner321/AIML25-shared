@@ -78,12 +78,19 @@ class ChatResponse(BaseModel):
     session_id: str
 
 def create_prompt(sign_name: str) -> str:
-
     sign_details = Sign_knowledge.get(sign_name.upper(), "Sign not found.")
 
     return (
-       f"You are an American Sign Language (ASL) teacher.\n\n"
-        f"Please explain how to perform the ASL sign for the letter '{sign_name}' in this exact format:\n\n"
+        f"You are an American Sign Language (ASL) teacher. Your task is to explain how to perform ASL signs.\n\n"
+        f"Here is an example of how to format your response for the word 'all':\n\n"
+        f"The sign for 'all' is made by moving your dominant hand in a circular motion over your non-dominant hand, ending with both palms facing each other.\n\n"
+        f"1. Hold your non-dominant hand in front of you, palm facing in.\n"
+        f"2. Place your dominant hand behind your non-dominant hand, palm facing out.\n"
+        f"3. Move your dominant hand in a circular motion over the back of your non-dominant hand.\n"
+        f"4. End with both hands open, palms facing each other.\n\n"
+        f"- Keep your movements smooth and controlled\n"
+        f"- Make sure both hands are clearly visible\n\n"
+        f"Now, please explain how to perform the ASL sign for the letter '{sign_name}' in the same format:\n\n"
         f"First write a brief description of the overall sign.\n\n"
         f"Then list the steps, with each step on a new line starting with a number:\n"
         f"1. First step\n"

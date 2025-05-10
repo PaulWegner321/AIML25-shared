@@ -101,11 +101,6 @@ Your feedback guidelines:
 - If the sign is correct: Give brief praise and 1-2 tips for further improvement
 - If the sign is incorrect: Briefly explain what needs adjustment, then provide specific tips to improve
 
-Here you can find one example for the word 'all':
-        Begin with both hands in front of you. Your non-dominant hand should be closer to you and be oriented towards yourself. Your dominant hand should be oriented away from yourself. Rotate your dominant hand so that its palm is oriented toward yourself and then rest the back of your dominant hand against the palm of your non-dominant hand'
-        Only output the explanation. Do not include any other text. If appropriate, use less tokens than available.
-        If you cant generate a description based on the relevant information, output:  'Sorry, I cant help your with this sign'
-
 Format your response exactly like this:
 DESCRIPTION: [One clear, conversational sentence about what you see]
 
