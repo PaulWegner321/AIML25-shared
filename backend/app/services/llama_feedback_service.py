@@ -4,6 +4,7 @@ from ibm_watsonx_ai.foundation_models.schema import TextGenParameters
 from typing import Dict, List
 import os
 from dotenv import load_dotenv
+import re
 
 # Load environment variables
 load_dotenv()
@@ -139,6 +140,24 @@ TIPS:
                 steps_section = ""
                 tips_section = ""
             
+            # Clean placeholder text patterns from the description
+            placeholder_patterns = [
+                r'\[Optional:.*?\]',
+                r'\[Optional.*?\]',
+                r'\[Write.*?\]',
+                r'\[First.*?\]',
+                r'\[Second.*?\]',
+                r'\[Third.*?\]',
+                r'\[In the case of.*?\]',
+                r'\[.*?provide.*?\]',
+                r'\[.*?improvement.*?\]',
+            ]
+            
+            for pattern in placeholder_patterns:
+                description_section = re.sub(pattern, '', description_section)
+                steps_section = re.sub(pattern, '', steps_section)
+                tips_section = re.sub(pattern, '', tips_section)
+            
             # Process steps - looking for numbered items
             steps = []
             for line in steps_section.split('\n'):
@@ -158,7 +177,7 @@ TIPS:
             # Default responses if nothing was generated
             if not description_section:
                 if is_correct:
-                    description_section = f"Great job! You correctly signed the letter '{expected_sign}'."
+                    description_section = f"Great job! You correctly signed the letter '{expected_sign}' with excellent form and precision. Your hand position shows great attention to detail."
                 else:
                     description_section = f"I noticed that you signed what looks like '{detected_sign}', but we were practicing the letter '{expected_sign}'."
             

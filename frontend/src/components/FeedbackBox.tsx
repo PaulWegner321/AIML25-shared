@@ -41,32 +41,60 @@ const FeedbackBox = ({ feedback, isCorrect, detectedLetter, confidence, expected
     
     if (!feedback) return parts;
     
+    // Remove placeholder text patterns that shouldn't be displayed
+    const cleanFeedback = feedback.replace(/\[Optional:.*?\]/g, '')
+                                  .replace(/\[Optional.*?\]/g, '')
+                                  .replace(/\[Write.*?\]/g, '')
+                                  .replace(/\[First.*?\]/g, '')
+                                  .replace(/\[Second.*?\]/g, '')
+                                  .replace(/\[Third.*?\]/g, '')
+                                  .replace(/\[In the case of.*?\]/g, '')
+                                  .replace(/\[.*?provide.*?\]/g, '')
+                                  .replace(/\[.*?improvement.*?\]/g, '');
+    
     // Split the feedback into sections
-    const sections = feedback.split('\n\n');
+    const sections = cleanFeedback.split('\n\n');
     
     // First section is always the description
     if (sections.length > 0) {
-      parts.description = sections[0];
+      parts.description = sections[0].trim();
+      
+      // Further clean the description - if it's just a dash or empty, replace it
+      if (parts.description === '-' || parts.description === '' || parts.description.length < 3) {
+        parts.description = '';
+      }
     }
     
     // Find steps section
     const stepsIndex = sections.findIndex(s => s.toLowerCase().includes('steps to improve:'));
     if (stepsIndex !== -1) {
       const stepsText = sections[stepsIndex].replace('Steps to improve:', '').trim();
-      parts.steps = stepsText.split('\n').filter(s => s.trim() !== '');
+      // Filter out empty lines and placeholders
+      parts.steps = stepsText.split('\n')
+                             .filter(s => s.trim() !== '' && !s.includes('[Optional'))
+                             .map(s => s.replace(/\[.*?\]/g, '').trim());
     }
     
     // Find tips section
     const tipsIndex = sections.findIndex(s => s.toLowerCase().includes('tips:'));
     if (tipsIndex !== -1) {
       const tipsText = sections[tipsIndex].replace('Tips:', '').trim();
-      parts.tips = tipsText.split('\n').filter(s => s.trim() !== '');
+      // Filter out empty lines and placeholders
+      parts.tips = tipsText.split('\n')
+                           .filter(s => s.trim() !== '' && !s.includes('[Optional'))
+                           .map(s => s.replace(/\[.*?\]/g, '').trim());
     }
     
     return parts;
   };
   
   const feedbackParts = feedback ? parseFeedback(feedback) : { description: '', steps: [], tips: [] };
+  
+  // Debug logging
+  console.log("Feedback description:", feedbackParts.description);
+  console.log("Is correct:", isCorrect);
+  console.log("Description is '-':", feedbackParts.description === '-');
+  console.log("Description is empty:", !feedbackParts.description);
   
   return (
     <div className="bg-white rounded-lg shadow-lg p-6">
@@ -129,7 +157,13 @@ const FeedbackBox = ({ feedback, isCorrect, detectedLetter, confidence, expected
 
             {/* Description Section */}
             <div className="p-4 border-b border-gray-200">
-              {feedbackParts.description}
+              {(!feedbackParts.description || feedbackParts.description === '-' || feedbackParts.description.trim() === '') ? (
+                isCorrect ? 
+                "Great job! Your hand position is perfect for this sign. You've made excellent progress in mastering this letter." :
+                "Your sign needs some adjustment. Try following the tips below to improve your form."
+              ) : (
+                feedbackParts.description
+              )}
             </div>
             
             {/* Steps Section - only show if there are steps */}
