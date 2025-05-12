@@ -29,6 +29,8 @@ const ChatBox = ({ signName, onClose, onMinimize }: ChatBoxProps) => {
     const initializeChat = async () => {
       setIsLoading(true);
       try {
+        console.log('Initializing chat for sign:', signName);
+        
         const response = await fetch(`${API_ENDPOINTS.chat}`, {
           method: 'POST',
           headers: {
@@ -41,11 +43,20 @@ const ChatBox = ({ signName, onClose, onMinimize }: ChatBoxProps) => {
         });
 
         if (!response.ok) {
-          throw new Error('Failed to initialize chat');
+          throw new Error(`Failed to initialize chat: ${response.status} ${response.statusText}`);
         }
 
         const data = await response.json();
+        console.log('Chat initialized successfully:', data);
+        
         setSessionId(data.session_id);
+        
+        // Check if we have a valid response
+        if (!data.response) {
+          console.error('Empty greeting response received:', data);
+          throw new Error('Empty greeting received');
+        }
+        
         setMessages([{ role: 'assistant', content: data.response }]);
       } catch (error) {
         console.error('Error initializing chat:', error);
@@ -78,6 +89,12 @@ const ChatBox = ({ signName, onClose, onMinimize }: ChatBoxProps) => {
     setIsLoading(true);
 
     try {
+      console.log('Sending message to backend:', {
+        sign_name: signName,
+        message: userMessage,
+        session_id: sessionId,
+      });
+      
       const response = await fetch(`${API_ENDPOINTS.chat}`, {
         method: 'POST',
         headers: {
@@ -91,18 +108,32 @@ const ChatBox = ({ signName, onClose, onMinimize }: ChatBoxProps) => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to send message');
+        throw new Error(`Failed to send message: ${response.status} ${response.statusText}`);
       }
 
       const data = await response.json();
+      console.log('Received response from backend:', data);
       
       // Update session ID if needed
       if (data.session_id && !sessionId) {
         setSessionId(data.session_id);
       }
       
-      // Add assistant response
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.response }]);
+      // Validate response content
+      if (!data.response || data.response.trim() === "") {
+        console.error('Empty response received from backend:', data);
+        // Add a fallback error message
+        setMessages((prev) => [
+          ...prev,
+          { 
+            role: 'assistant', 
+            content: `I'm having trouble generating a response about the '${signName}' sign. Could you try asking another question?` 
+          },
+        ]);
+      } else {
+        // Add assistant response
+        setMessages((prev) => [...prev, { role: 'assistant', content: data.response }]);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       // Add error message
@@ -110,7 +141,7 @@ const ChatBox = ({ signName, onClose, onMinimize }: ChatBoxProps) => {
         ...prev,
         { 
           role: 'assistant', 
-          content: 'Sorry, I had trouble responding. Please try again.' 
+          content: `Sorry, I had trouble responding. Error: ${error instanceof Error ? error.message : 'Unknown error'}` 
         },
       ]);
     } finally {

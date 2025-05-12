@@ -12,6 +12,7 @@ from pathlib import Path
 import time
 import glob
 import logging
+import uuid
 
 # Import the HandDetector
 from .models.keypoint_detector import HandDetector
@@ -679,10 +680,29 @@ async def get_sign_description(request: SignDescriptionRequest):
 async def chat_endpoint(request: ChatRequest):
     """Endpoint for interactive chat about ASL signs"""
     try:
-        return await llm_service.chat(request)
+        # Log the incoming request
+        print(f"CHAT ENDPOINT - Request: sign_name={request.sign_name}, session_id={request.session_id}, message='{request.message}'")
+        
+        # Process the chat request
+        response = await llm_service.chat(request)
+        
+        # Log the outgoing response
+        print(f"CHAT ENDPOINT - Response: session_id={response.session_id}, response_text='{response.response}'")
+        print(f"CHAT ENDPOINT - Full response object: {response.dict()}")
+        
+        # Ensure we return a valid response even if it's missing data
+        if not response.response or response.response.strip() == "":
+            print("CHAT ENDPOINT - WARNING: Empty response text detected, using fallback")
+            response.response = f"I'm having trouble generating a response about the '{request.sign_name}' sign. Could you try asking another question?"
+        
+        return response
     except Exception as e:
         print(f"Error in chat endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # Return a valid response even on error
+        return ChatResponse(
+            response=f"Sorry, I encountered an error: {str(e)}. Please try again.",
+            session_id=request.session_id or str(uuid.uuid4())
+        )
 
 @app.get("/health")
 async def health_check():

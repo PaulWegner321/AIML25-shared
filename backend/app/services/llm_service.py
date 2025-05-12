@@ -8,6 +8,8 @@ import os
 from dotenv import load_dotenv
 import uuid
 import time
+import logging
+import re
 
 # Load environment variables
 load_dotenv()
@@ -93,8 +95,6 @@ def create_prompt(sign_name: str) -> str:
         f"4. sign: 'Certain' - explanation: Begin with your index finger touching your mouth and pointing up. Then, bring it forward and down until your index finger is facing forwards.\n"
         f"5. sign: 'All' - explanation: Begin with both hands in front of you. Your non-dominant hand should be closer to you and be oriented towards yourself. Your dominant hand should be oriented away from yourself. Rotate your dominant hand so that its palm is oriented toward yourself and then rest the back of your dominant hand against the palm of your non-dominant hand.\n\n"
         f"Your response must follow this exact format:\n\n"
-        f"How to Sign \"{sign_name}\"\n\n"
-        f"Description\n"
         f"[Write a brief 1-2 sentence description of the overall sign, mentioning what it looks like or what distinguishing features it has]\n\n"
         f"Steps\n"
         f"1. [First step]\n"
@@ -183,19 +183,33 @@ class LLMService:
                     project_id=WX_PROJECT_ID
                 )
                 
-                # Setup model parameters
-                self.params = TextGenParameters(
+                # Setup parameters for sign explanation model (Llama)
+                self.sign_params = TextGenParameters(
                     temperature=0.05,
                     max_new_tokens=300
                 )
                 
-                # Initialize model
-                self.model = ModelInference(
+                # Setup parameters for chat model (Mistral)
+                self.chat_params = TextGenParameters(
+                    temperature=0.3,
+                    max_new_tokens=500
+                )
+                
+                # Initialize Llama model for sign explanations
+                self.sign_model = ModelInference(
                     api_client=self.client,
-                    params=self.params,
+                    params=self.sign_params,
                     model_id="meta-llama/llama-4-scout-17b-16e-instruct"
                 )
-                print("Successfully initialized WatsonX connection")
+                
+                # Initialize Mistral model for chat interactions
+                self.chat_model = ModelInference(
+                    api_client=self.client,
+                    params=self.chat_params,
+                    model_id="mistralai/mistral-large"
+                )
+                
+                print("Successfully initialized WatsonX connection with Llama for signs and Mistral for chat")
             except Exception as e:
                 print(f"Error initializing WatsonX: {e}")
                 self.watson_available = False
@@ -239,8 +253,14 @@ class LLMService:
                 try:
                     # Generate response using WatsonX
                     prompt = create_prompt(sign_name)
-                    response = self.model.generate(prompt=prompt)
+                    print(f"LOOKUP - Sending prompt to WatsonX for sign '{sign_name}'")
+                    print(f"LOOKUP - Using parameters: temperature={self.sign_params.temperature}, max_new_tokens={self.sign_params.max_new_tokens}")
+                    
+                    response = self.sign_model.generate(prompt=prompt)
                     generated_text = response['results'][0]['generated_text']
+                    
+                    print(f"LOOKUP - Raw generated text length: {len(generated_text)}")
+                    print(f"LOOKUP - First 100 chars: {generated_text[:100]}...")
                     
                     # Process the response into structured format
                     processed_response = process_llm_response(generated_text)
@@ -297,6 +317,8 @@ class LLMService:
         user_message = request.message
         session_id = request.session_id or str(uuid.uuid4())
         
+        print(f"Chat request received - sign: {sign_name}, session: {session_id}, message: '{user_message}'")
+        
         # Get or create chat history
         if session_id not in self.chat_sessions:
             # Get sign details
@@ -325,6 +347,7 @@ class LLMService:
                     f"or request more detailed explanations for any aspect of the sign."
                 )
                 self.chat_sessions[session_id]["messages"].append({"role": "assistant", "content": greeting})
+                print(f"New session greeting: '{greeting}'")
                 return ChatResponse(response=greeting, session_id=session_id)
         
         # Update session access time
@@ -334,6 +357,8 @@ class LLMService:
         self.chat_sessions[session_id]["messages"].append({"role": "user", "content": user_message})
         
         # Get response using WatsonX or fallback
+        assistant_response = ""  # Initialize with empty string
+        
         if self.watson_available:
             try:
                 # Format chat history for prompt
@@ -342,54 +367,87 @@ class LLMService:
                     for msg in self.chat_sessions[session_id]["messages"]
                 ])
                 
-                prompt = f"""
-                You are an interactive ASL tutor specialized in teaching American Sign Language.
+                # Create a simpler prompt format for Mistral
+                prompt = (
+                    f"You are an ASL tutor specialized in teaching American Sign Language for the letter '{sign_name}'.\n\n"
+                    f"Here's what you know about signing letter '{sign_name}':\n{Sign_knowledge.get(sign_name, 'Unknown sign')}\n\n"
+                    f"Previous conversation:\n{chat_history}\n\n"
+                    f"Please respond to the user's latest question with helpful information about ASL sign '{sign_name}'. "
+                    f"Keep responses concise (20-40 words) and direct. If the user asks about topics unrelated to ASL, politely "
+                    f"redirect them to ASL topics for letter '{sign_name}'."
+                )
                 
-                Current sign being discussed: {sign_name}
+                print(f"Sending prompt to WatsonX")
+                print(f"FULL PROMPT SENT TO WATSONX:\n{'-'*50}\n{prompt}\n{'-'*50}")
+                print(f"Starting WatsonX API call with params: temperature={self.chat_params.temperature}, max_new_tokens={self.chat_params.max_new_tokens}, model_id={self.chat_model.model_id}")
                 
-                Previous conversation:
-                {chat_history}
+                # Set detailed logging for the request/response
+                logging.getLogger('ibm_watsonx_ai').setLevel(logging.DEBUG)
+                logging.getLogger('httpx').setLevel(logging.DEBUG)
                 
-                Respond to the user's latest question with helpful, clear information about ASL.
-                Keep your response concise (15-40 words) and informative, focusing specifically on what was asked.
-                Do not use phrases like "I would say" or "Your response should be" - just provide the direct answer.
-                Do not start with "assistant:" or similar prefixes.
+                response = self.chat_model.generate(prompt=prompt)
+                print(f"Raw WatsonX API response:\n{'-'*50}\n{response}\n{'-'*50}")
                 
-                If the user asks about topics unrelated to ASL or the letter '{sign_name}' (like recipes, politics, math problems, etc.), respond with:
-                "I'm your ASL tutor for the letter '{sign_name}'. I can't help with that, but I'd be happy to answer questions about forming the '{sign_name}' sign, common mistakes to avoid, or tips for practice."
-                """
-                
-                response = self.model.generate(prompt=prompt)
                 assistant_response = response['results'][0]['generated_text'].strip()
+                print(f"Raw WatsonX response text: '{assistant_response}'")
+                print(f"Response text length: {len(assistant_response)}")
                 
-                # Clean up response if needed
-                if assistant_response.startswith("assistant:"):
-                    assistant_response = assistant_response[10:].strip()
+                # If response is empty, try with different parameters
+                if not assistant_response or assistant_response.strip() == "":
+                    print("Empty response received, trying with higher temperature...")
+                    # Create a one-time use model with higher temperature
+                    retry_params = TextGenParameters(
+                        temperature=0.7,
+                        max_new_tokens=500
+                    )
+                    retry_model = ModelInference(
+                        api_client=self.client,
+                        params=retry_params,
+                        model_id=self.chat_model.model_id
+                    )
+                    print("Retrying with temperature=0.7, max_new_tokens=500")
+                    try:
+                        retry_response = retry_model.generate(prompt=prompt)
+                        print(f"Retry response:\n{'-'*50}\n{retry_response}\n{'-'*50}")
+                        assistant_response = retry_response['results'][0]['generated_text'].strip()
+                        print(f"Retry response text: '{assistant_response}'")
+                    except Exception as retry_error:
+                        print(f"Error during retry: {str(retry_error)}")
                 
-                # Remove any instructions or meta text that might be included
-                common_prefixes = [
-                    "your response should be",
-                    "the answer is",
-                    "i would say",
-                    "in response to your question",
-                    "to answer your question",
-                ]
+                # Clean the response using our helper method
+                assistant_response = self._clean_response(assistant_response, user_message)
                 
-                for prefix in common_prefixes:
-                    if assistant_response.lower().startswith(prefix):
-                        assistant_response = assistant_response[len(prefix):].strip()
-                
-                # Remove period at end if there's a second sentence starting point
-                parts = assistant_response.split('. ', 1)
-                if len(parts) > 1 and len(parts[0]) < 50:
-                    assistant_response = parts[0].strip()
+                # Don't truncate responses about off-topic questions
+                if "I'm your ASL tutor for the letter" in assistant_response and "I can't help with that" in assistant_response:
+                    # Keep the full response for off-topic warnings
+                    pass
+                else:
+                    # For regular responses, consider shortening very long ones
+                    parts = assistant_response.split('. ', 1)
+                    if len(parts) > 1 and len(parts[0]) < 50 and len(assistant_response) > 200:
+                        assistant_response = parts[0].strip() + "."
 
             except Exception as e:
-                print(f"WatsonX chat error: {e}")
+                print(f"WatsonX chat error: {str(e)}")
                 assistant_response = self._generate_simple_response(user_message, sign_name)
+                # Also clean fallback responses
+                assistant_response = self._clean_response(assistant_response, user_message)
         else:
             # Simple fallback for non-Watson mode
+            print(f"WatsonX not available, using fallback response generator")
             assistant_response = self._generate_simple_response(user_message, sign_name)
+            # Also clean fallback responses
+            assistant_response = self._clean_response(assistant_response, user_message)
+        
+        # Ensure we have a non-empty response
+        if not assistant_response or assistant_response.strip() == "":
+            print(f"WARNING: Empty response generated. Using fallback response.")
+            assistant_response = self._generate_simple_response(user_message, sign_name)
+            # If still empty, use a generic response
+            if not assistant_response or assistant_response.strip() == "":
+                assistant_response = f"I'm sorry, I couldn't generate a proper response about the '{sign_name}' sign. Could you please try asking your question differently?"
+        
+        print(f"Final response: '{assistant_response}'")
         
         # Store assistant's response
         self.chat_sessions[session_id]["messages"].append({"role": "assistant", "content": assistant_response})
@@ -405,6 +463,8 @@ class LLMService:
         sign_details = Sign_knowledge.get(sign_name, "")
         parts = sign_details.split('. ', 2)  # Split into up to 3 parts
         
+        print(f"Generating simple response for message: '{message_lower}', sign: '{sign_name}'")
+        
         # List of ASL-related terms to check if the message is on-topic
         asl_terms = ["asl", "sign", "hand", "finger", "position", "thumb", "index", "middle", "ring", "pinky", 
                     "palm", "wrist", "movement", "alphabet", "learn", "practice", "form", "signing", "language"]
@@ -416,13 +476,18 @@ class LLMService:
                 is_off_topic = False
                 break
                 
-        # Handle potentially off-topic questions
-        if is_off_topic and len(message_lower.split()) > 3:  # Only trigger for longer queries
+        # Handle potentially off-topic questions with a complete response
+        if is_off_topic and len(message_lower.split()) > 2:  # Only trigger for longer queries
             return f"I'm your ASL tutor for the letter '{sign_name}'. I can't help with that, but I'd be happy to answer questions about forming the '{sign_name}' sign, common mistakes to avoid, or tips for practice."
         
+        # Simple one-word queries - treat as greetings
+        if len(message_lower.split()) <= 2:
+            if any(word in message_lower for word in ["hi", "hello", "hey", "greetings"]):
+                return f"Hi there! I'm here to help you learn the ASL sign for the letter '{sign_name}'. What would you like to know about it?"
+        
         # Check for common question patterns
-        if any(word in message_lower for word in ["how", "form", "make", "do"]):
-            return f"{parts[0]}."
+        if any(word in message_lower for word in ["how", "form", "make", "do", "sign"]):
+            return f"To form the letter '{sign_name}' in ASL: {parts[0]}. Make sure your {parts[1].lower() if len(parts) > 1 else 'hand is in the correct position'}."
             
         elif any(word in message_lower for word in ["difficult", "hard", "challenge"]):
             return f"The sign for '{sign_name}' is straightforward with practice. Focus on proper finger positioning and hand orientation."
@@ -439,8 +504,143 @@ class LLMService:
         elif any(word in message_lower for word in ["thank", "thanks", "appreciate"]):
             return f"You're welcome! Happy to help with the '{sign_name}' sign."
             
+        # For off-topic queries
+        elif any(word in message_lower for word in ["cookie", "recipe", "bake", "cook", "food", "eat"]):
+            return f"I'm here to help with ASL! Let's focus on the sign for '{sign_name}'. Remember, the thumb curls alongside the index finger, and all fingers bend downward with the palm facing forward."
+            
         else:
-            return f"For the '{sign_name}' sign: {parts[0]}. What else would you like to know?"
+            # Default response for any other message
+            return f"For the '{sign_name}' sign: {parts[0]}. What else would you like to know about forming this sign correctly?"
+            
+    def _clean_response(self, response_text, user_message=""):
+        """Clean up the LLM response text by removing formatting artifacts."""
+        print(f"Original response before cleaning: '{response_text}'")
+        assistant_response = response_text.strip()
+        
+        # Handle responses with visual separators like "---"
+        lines = assistant_response.split('\n')
+        filtered_lines = []
+        
+        # Special case: Check for the pattern in the most recent screenshot
+        # Where "---" is followed by "assistant: I'm here to help with ASL!"
+        separator_index = -1
+        for i, line in enumerate(lines):
+            if line.strip() and all(c == '-' for c in line.strip()):
+                separator_index = i
+                break
+                
+        if separator_index >= 0 and separator_index + 1 < len(lines):
+            # Check if the line after the separator contains an assistant message
+            after_separator = '\n'.join(lines[separator_index+1:])
+            if "assistant:" in after_separator.lower():
+                # Extract just that part
+                assistant_response = after_separator
+                filtered_lines = []  # Skip regular filtering
+            
+        # Regular filtering for other cases
+        if filtered_lines == []:  # Only if not already handled by special case
+            for line in lines:
+                # Skip separator lines with just dashes
+                if line.strip() and not all(c == '-' for c in line.strip()):
+                    filtered_lines.append(line)
+                    
+        if filtered_lines:
+            assistant_response = '\n'.join(filtered_lines)
+        
+        # Find any assistant message in a conversation format
+        # This handles formats like "user: X\n\nassistant: I'm here to help with ASL!"
+        assistant_regex = r'(?:^|\n)(?:assistant|a):\s*(.*?)(?=\n\w+:|$)'
+        assistant_matches = re.findall(assistant_regex, assistant_response, re.DOTALL | re.IGNORECASE)
+        if assistant_matches:
+            # If we find an assistant part, use the most relevant one (typically the last)
+            assistant_response = assistant_matches[-1].strip()
+        else:
+            # Continue with other cleaning methods if no assistant part found
+            
+            # Basic cleanup
+            if assistant_response.startswith("assistant:"):
+                assistant_response = assistant_response[10:].strip()
+                
+            # Remove common meta-instruction prefixes
+            common_prefixes = [
+                "your response should be",
+                "the answer is",
+                "i would say",
+                "in response to your question",
+                "to answer your question",
+            ]
+            
+            for prefix in common_prefixes:
+                if assistant_response.lower().startswith(prefix):
+                    assistant_response = assistant_response[len(prefix):].strip()
+            
+            # Check for the specific pattern: "user: Question\n\nA: Answer"
+            if assistant_response.lower().startswith("user:") and "\n\n" in assistant_response:
+                parts = assistant_response.split("\n\n", 1)
+                if len(parts) == 2 and (parts[1].lower().startswith("a:") or parts[1].lower().startswith("assistant:")):
+                    # Extract just the answer part
+                    answer_part = parts[1]
+                    for prefix in ["a:", "assistant:"]:
+                        if answer_part.lower().startswith(prefix):
+                            answer_part = answer_part[len(prefix):].strip()
+                            break
+                    assistant_response = answer_part
+            
+            # Check for 'user:' pattern elsewhere in the response
+            elif "user:" in assistant_response.lower():
+                parts = assistant_response.split("\n\n")
+                filtered_parts = []
+                
+                for part in parts:
+                    if not part.strip().lower().startswith("user:"):
+                        filtered_parts.append(part)
+                
+                if filtered_parts:
+                    assistant_response = "\n\n".join(filtered_parts).strip()
+            
+            # Look for and remove "assistant:" role labels anywhere in text
+            lines = assistant_response.split('\n')
+            for i, line in enumerate(lines):
+                line_lower = line.strip().lower()
+                # Check for standalone role indicators
+                if line_lower == "assistant:" or line_lower == "a:":
+                    lines[i] = ""
+                # Check for role indicators at start of lines
+                elif line_lower.startswith("assistant:") or line_lower.startswith("a:"):
+                    for prefix in ["assistant:", "a:"]:
+                        if line_lower.startswith(prefix):
+                            lines[i] = line[len(prefix):].strip()
+                            break
+            
+            # Rejoin lines, removing any empty ones
+            assistant_response = '\n'.join(line for line in lines if line.strip())
+        
+        # Further cleanup for all paths
+        
+        # Check for "Your response:" prefix and remove it
+        if assistant_response.startswith("Your response:"):
+            assistant_response = assistant_response[14:].strip()
+        elif assistant_response.lower().startswith("your response:"):
+            assistant_response = assistant_response[14:].strip()
+        elif assistant_response.startswith("Your response -"):
+            assistant_response = assistant_response[14:].strip()
+        elif assistant_response.lower().startswith("your response -"):
+            assistant_response = assistant_response[14:].strip()
+        elif assistant_response.lower().startswith("your response "):
+            assistant_response = assistant_response[14:].strip()
+        
+        # Remove the user's message if it somehow got into the response
+        if user_message and len(user_message) > 3 and user_message.lower() in assistant_response.lower():
+            parts = assistant_response.lower().split(user_message.lower(), 1)
+            if len(parts) > 1 and parts[1].strip():
+                assistant_response = parts[1].strip()
+        
+        # Final cleanup to remove any remaining role prefixes that may be embedded in the response
+        assistant_response = re.sub(r'(?:^|\s)(?:assistant|a):\s*', ' ', assistant_response, flags=re.IGNORECASE)
+        assistant_response = assistant_response.strip()
+        
+        print(f"Cleaned response: '{assistant_response}'")
+        return assistant_response
 
 # Create a singleton instance
 llm_service = LLMService() 
