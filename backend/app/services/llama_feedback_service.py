@@ -20,7 +20,7 @@ if not WX_PROJECT_ID:
 if not WX_URL:
     raise ValueError("WATSONX_URL not found in environment variables")
 
-class MistralFeedbackService:
+class LLaMaFeedbackService:
     def __init__(self):
         # Setup Watson credentials
         credentials = Credentials(
@@ -43,7 +43,7 @@ class MistralFeedbackService:
         self.model = ModelInference(
             api_client=self.client,
             params=self.params,
-            model_id="mistralai/mistral-large"
+            model_id="meta-llama/llama-4-scout-17b-16e-instruct"
         )
         
         # ASL Sign Knowledge Base
@@ -97,6 +97,7 @@ Correct Sign Reference:
 Your feedback guidelines:
 - Speak directly to the student in a friendly, encouraging tone
 - Do not refer to "the user" - use "you" instead
+- The correct hand position can be reviewed in the "Lookup" part of the web application, where the user can access text-based definitions
 - Be concise but specific
 - If the sign is correct: Give brief praise and 1-2 tips for further improvement
 - If the sign is incorrect: Briefly explain what needs adjustment, then provide specific tips to improve
@@ -188,12 +189,12 @@ TIPS:
             }
             
         except Exception as e:
-            print(f"Error generating feedback with Mistral: {str(e)}")
+            print(f"Error generating feedback with LLaMa Scout: {str(e)}")
             return {
                 "description": f"I noticed you signed what looks like '{detected_sign}', but we were practicing the letter '{expected_sign}'. Let me help you improve!",
-                "steps": ["Review the correct hand position in the guide", "Practice forming the sign slowly and deliberately", "Compare your sign with the reference images to spot differences"],
+                "steps": ["Review the correct hand position on the lookup page", "Practice forming the sign slowly and deliberately", "Compare your sign with the explanations to spot differences"],
                 "tips": ["Make sure your entire hand is clearly visible to the camera", "Pay special attention to the finger positions described in the guide"]
             }
 
 # Create a singleton instance
-mistral_feedback_service = MistralFeedbackService() 
+llama_feedback_service = LLaMaFeedbackService() 

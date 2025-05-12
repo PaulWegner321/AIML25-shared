@@ -81,26 +81,32 @@ def create_prompt(sign_name: str) -> str:
     sign_details = Sign_knowledge.get(sign_name.upper(), "Sign not found.")
 
     return (
-        f"You are an American Sign Language (ASL) teacher. Your task is to explain how to perform ASL signs.\n\n"
-        f"Here is an example of how to format your response for the word 'all':\n\n"
-        f"The sign for 'all' is made by moving your dominant hand in a circular motion over your non-dominant hand, ending with both palms facing each other.\n\n"
-        f"1. Hold your non-dominant hand in front of you, palm facing in.\n"
-        f"2. Place your dominant hand behind your non-dominant hand, palm facing out.\n"
-        f"3. Move your dominant hand in a circular motion over the back of your non-dominant hand.\n"
-        f"4. End with both hands open, palms facing each other.\n\n"
-        f"- Keep your movements smooth and controlled\n"
-        f"- Make sure both hands are clearly visible\n\n"
-        f"Now, please explain how to perform the ASL sign for the letter '{sign_name}' in the same format:\n\n"
-        f"First write a brief description of the overall sign.\n\n"
-        f"Then list the steps, with each step on a new line starting with a number:\n"
-        f"1. First step\n"
-        f"2. Second step\n"
-        f"etc.\n\n"
-        f"Finally, provide 1-2 specific tips for performing this sign correctly, each on a new line starting with a bullet point (-).\n\n"
-        f"Do not use any markdown formatting (no **, *, or other special characters).\n\n"
-        f"Here is the reference information for the letter '{sign_name}':\n"
+        f"You are an American Sign Language (ASL) teacher.\n\n"
+        f"Please clearly explain how to perform the ASL sign on a beginner level for the letter '{sign_name}'. "
+        f"Use simple language and full sentences. Do not assume any prior knowledge about ASL.\n\n"
+        f"Here is relevant information for the letter '{sign_name}':\n"
         f"{sign_details}\n\n"
-        f"Keep your response clear and beginner-friendly. If you cannot generate a description, output: 'Sorry, I cannot help with this sign'\n\n"
+        f"Refer to the following examples for how to structure your response:\n"
+        f"1. sign: 'Hello' - explanation: Begin with the side of your index finger against your forehead and then move your hand up and away from your head.\n"
+        f"2. sign: 'Customer' - explanation: Begin with your hands on each side of the top of your chest with your palms oriented toward each other and your thumbs touching your chest. Move your hands off your chest and bring them down and press them against your midsection.\n"
+        f"3. sign: 'Become' - explanation: Begin with both palms oriented towards each other with your hands perpendicular to each other. Then, rotate your wrists until your hands are perpendicular to each other in the opposite direction.\n"
+        f"4. sign: 'Certain' - explanation: Begin with your index finger touching your mouth and pointing up. Then, bring it forward and down until your index finger is facing forwards.\n"
+        f"5. sign: 'All' - explanation: Begin with both hands in front of you. Your non-dominant hand should be closer to you and be oriented towards yourself. Your dominant hand should be oriented away from yourself. Rotate your dominant hand so that its palm is oriented toward yourself and then rest the back of your dominant hand against the palm of your non-dominant hand.\n\n"
+        f"Your response must follow this exact format:\n\n"
+        f"How to Sign \"{sign_name}\"\n\n"
+        f"Description\n"
+        f"[Write a brief 1-2 sentence description of the overall sign, mentioning what it looks like or what distinguishing features it has]\n\n"
+        f"Steps\n"
+        f"1. [First step]\n"
+        f"2. [Second step]\n"
+        f"3. [Third step]\n"
+        f"... and so on\n\n"
+        f"Tips\n"
+        f"- [First tip for performing this sign correctly]\n"
+        f"- [Second tip if applicable]\n\n"
+        f"Do not use any markdown formatting (no **, *, or other special characters).\n\n"
+        f"If you cant generate a description based on the relevant information, output: 'Sorry, I cant help with this sign'\n\n"
+        f"Only output the formatted response once. Do not include any other text. If appropriate, use fewer tokens than available.\n"
     )
 
 def process_llm_response(text: str) -> Dict:
@@ -187,7 +193,7 @@ class LLMService:
                 self.model = ModelInference(
                     api_client=self.client,
                     params=self.params,
-                    model_id="mistralai/mistral-large"
+                    model_id="meta-llama/llama-4-scout-17b-16e-instruct"
                 )
                 print("Successfully initialized WatsonX connection")
             except Exception as e:
@@ -300,7 +306,8 @@ class LLMService:
             system_context = (
                 f"You are an ASL tutor helping with the sign for the letter '{sign_name}'. "
                 f"Reference information: {sign_details} "
-                f"Be friendly, helpful and concise in your responses. Focus on teaching the correct ASL finger positions."
+                f"Be friendly, helpful and concise in your responses. Focus on teaching the correct ASL finger positions. "
+                f"If asked about topics unrelated to ASL or the letter '{sign_name}', politely explain that you're an ASL tutor and can only help with ASL-related questions."
             )
             
             # Initialize session with system message and timestamp
@@ -347,6 +354,9 @@ class LLMService:
                 Keep your response concise (15-40 words) and informative, focusing specifically on what was asked.
                 Do not use phrases like "I would say" or "Your response should be" - just provide the direct answer.
                 Do not start with "assistant:" or similar prefixes.
+                
+                If the user asks about topics unrelated to ASL or the letter '{sign_name}' (like recipes, politics, math problems, etc.), respond with:
+                "I'm your ASL tutor for the letter '{sign_name}'. I can't help with that, but I'd be happy to answer questions about forming the '{sign_name}' sign, common mistakes to avoid, or tips for practice."
                 """
                 
                 response = self.model.generate(prompt=prompt)
@@ -394,6 +404,21 @@ class LLMService:
         message_lower = message.lower()
         sign_details = Sign_knowledge.get(sign_name, "")
         parts = sign_details.split('. ', 2)  # Split into up to 3 parts
+        
+        # List of ASL-related terms to check if the message is on-topic
+        asl_terms = ["asl", "sign", "hand", "finger", "position", "thumb", "index", "middle", "ring", "pinky", 
+                    "palm", "wrist", "movement", "alphabet", "learn", "practice", "form", "signing", "language"]
+                
+        # Check if message appears to be off-topic (doesn't contain ASL-related terms)
+        is_off_topic = True
+        for term in asl_terms:
+            if term in message_lower:
+                is_off_topic = False
+                break
+                
+        # Handle potentially off-topic questions
+        if is_off_topic and len(message_lower.split()) > 3:  # Only trigger for longer queries
+            return f"I'm your ASL tutor for the letter '{sign_name}'. I can't help with that, but I'd be happy to answer questions about forming the '{sign_name}' sign, common mistakes to avoid, or tips for practice."
         
         # Check for common question patterns
         if any(word in message_lower for word in ["how", "form", "make", "do"]):

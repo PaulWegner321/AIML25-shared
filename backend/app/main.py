@@ -20,7 +20,7 @@ from .services.gpt4o_service import get_asl_prediction
 from .services.feedback_service import get_sign_feedback
 from .models.new_cnn_model import NewCNNPredictor
 from .services.llm_service import llm_service, SignRequest, ChatRequest, ChatResponse
-from .services.mistral_feedback_service import mistral_feedback_service
+from .services.llama_feedback_service import llama_feedback_service
 
 # Load environment variables
 load_dotenv()
@@ -154,7 +154,7 @@ async def evaluate_sign(file: UploadFile = File(...), expected_sign: str = Form(
             gpt4v_result = get_asl_prediction(temp_path)
             
             # Step 3: Generate feedback using Mistral based on GPT-4V's description
-            feedback = mistral_feedback_service.generate_feedback(
+            feedback = llama_feedback_service.generate_feedback(
                 image_description=gpt4v_result.get("feedback", ""),
                 expected_sign=expected_sign,
                 detected_sign=predicted_letter
