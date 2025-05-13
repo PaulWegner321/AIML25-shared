@@ -14,6 +14,7 @@ This web application is an AI-powered learning tool that helps users master the 
 - **Tips & Feedback**: Get helpful tips and immediate feedback on your signing
 - **Computer Vision Detection**: CNN-based ASL sign detection with MediaPipe hand tracking
 - **AI-Generated Feedback**: Leverages GPT-4V and Mistral for detailed sign analysis
+- **Model Comparison Framework**: Comprehensive evaluation of multiple vision-language models on ASL recognition
 
 ## Tech Stack
 
@@ -44,20 +45,29 @@ This web application is an AI-powered learning tool that helps users master the 
 │   │   └── styles/               # Global styles
 │   └── public/                   # Static assets
 │
-└── backend/                     # FastAPI backend application
-    ├── app/
-    │   ├── models/               # ML models
-    │   │   ├── weights/          # Model weights storage
-    │   │   │   ├── cnn_model.pth  # CNN model weights
-    │   │   │   └── new_cnn_model.pth  # New CNN model weights
-    │   │   ├── new_cnn_model.py  # CNN model architecture
-    │   │   └── keypoint_detector.py  # Hand detection models
-    │   ├── services/             # AI services and business logic
-    │   ├── schemas/              # Pydantic schemas
-    │   ├── config/               # Configuration files
-    │   └── main.py               # Main FastAPI application
-    ├── render.yaml               # Render deployment configuration
-    └── requirements.txt          # Python dependencies
+├── backend/                     # FastAPI backend application
+│   ├── app/
+│   │   ├── models/               # ML models
+│   │   │   ├── weights/          # Model weights storage
+│   │   │   │   ├── cnn_model.pth  # CNN model weights
+│   │   │   │   └── new_cnn_model.pth  # New CNN model weights
+│   │   │   ├── new_cnn_model.py  # CNN model architecture
+│   │   │   └── keypoint_detector.py  # Hand detection models
+│   │   ├── services/             # AI services and business logic
+│   │   ├── schemas/              # Pydantic schemas
+│   │   ├── config/               # Configuration files
+│   │   └── main.py               # Main FastAPI application
+│   ├── render.yaml               # Render deployment configuration
+│   └── requirements.txt          # Python dependencies
+│
+└── model_comparison/            # VLM model evaluation framework
+    ├── data/                    # ASL image dataset (A-Z folders)
+    ├── test_*.py                # Individual model test scripts
+    ├── evaluate_models.py       # Evaluation framework
+    ├── dataset_creation/        # Tools for dataset creation
+    ├── Notebooks/               # Jupyter notebooks for development
+    ├── evaluation_results/      # Model evaluation results
+    └── requirements.txt         # Python dependencies for model testing
 ```
 
 ## Local Development
@@ -112,6 +122,44 @@ This web application is an AI-powered learning tool that helps users master the 
 
 6. The API will be available at [http://localhost:8000](http://localhost:8000).
 
+### Model Comparison Framework
+
+This project includes a comprehensive framework for evaluating multiple vision-language models (VLMs) on ASL recognition tasks:
+
+1. Navigate to the model_comparison directory:
+   ```bash
+   cd model_comparison
+   ```
+
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. Set up API keys:
+   - Create or update the .env file in the backend directory with API keys for models you want to test:
+   ```
+   OPENAI_API_KEY=your_openai_key
+   GEMINI_API_KEY=your_gemini_key
+   IBM_CLOUD_API_KEY=your_ibm_key
+   ```
+
+4. Run the evaluation:
+   ```bash
+   python evaluate_models.py --dataset_path ./data --sample_size 30
+   ```
+
+5. View results in the evaluation_results directory.
+
+The framework supports testing:
+- OpenAI GPT-4o and GPT-4 Turbo Vision
+- Google Gemini 2 Flash and Flash Lite
+- Meta's Llama family models (90B Vision, Maverick 17B, Scout 17B)
+- Mistral's Pixtral 12B
+- IBM Granite Vision
+
+Each model is tested with multiple prompting strategies including zero-shot, few-shot, chain-of-thought, visual grounding, and contrastive approaches.
+
 ## Deployment
 
 ### Frontend (Vercel)
@@ -132,23 +180,6 @@ This web application is an AI-powered learning tool that helps users master the 
    - Copies model weights to the appropriate location
    - Sets environment variables
    - Provides health checks
-
-## AI Models
-
-### CNN Model for ASL Detection
-
-The application uses a Convolutional Neural Network (CNN) for ASL sign detection:
-
-- **Architecture**: Custom CNN with 4 convolutional layers
-- **Input**: 224x224 RGB images of hand signs
-- **Pre-processing**: MediaPipe hand tracking for better localization
-- **Output**: 25 ASL letters (excluding J and Z which require motion)
-
-### Vision and LLM Integration
-
-- **GPT-4 Vision**: Analyzes hand images for detailed description
-- **Mistral**: Generates structured feedback based on sign analysis
-- **Pipeline**: Images are processed through CNN → GPT-4V → Mistral for comprehensive feedback
 
 ## API Endpoints
 
