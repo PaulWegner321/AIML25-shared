@@ -131,8 +131,8 @@ const ChatBox = ({ signName, onClose, onMinimize }: ChatBoxProps) => {
           },
         ]);
       } else {
-        // Add assistant response
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.response }]);
+      // Add assistant response
+      setMessages((prev) => [...prev, { role: 'assistant', content: data.response }]);
       }
     } catch (error) {
       console.error('Error sending message:', error);

@@ -197,11 +197,11 @@ def get_asl_prediction(image_path: str, prompt_strategy: Literal["zero_shot", "f
         visibility_response = client.models.generate_content(
             model=model_name,
             contents=visibility_contents,
-            generation_config={
-                "temperature": 0.05,
-                "top_p": 1.0,
-                "max_output_tokens": 300
-            }
+            config=types.GenerateContentConfig(
+                temperature=0.05,
+                top_p=1.0,
+                max_output_tokens=300
+            )
         )
         
         visibility_text = visibility_response.text.strip().lower()
@@ -250,11 +250,11 @@ def get_asl_prediction(image_path: str, prompt_strategy: Literal["zero_shot", "f
         response = client.models.generate_content(
             model=model_name,
             contents=asl_contents,
-            generation_config={
-                "temperature": 0.05,
-                "top_p": 1.0,
-                "max_output_tokens": 300
-            }
+            config=types.GenerateContentConfig(
+                temperature=0.05,
+                top_p=1.0,
+                max_output_tokens=300
+            )
         )
         
         # Calculate total response time

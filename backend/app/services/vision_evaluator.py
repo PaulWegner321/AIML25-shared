@@ -343,10 +343,10 @@ class VisionEvaluator:
         for i, match in enumerate(matches):
             try:
                 print(f"Trying to parse potential JSON match #{i+1}: {match[:50]}...")
-                try:
+        try:
                     json_data = json.loads(match)
                     print(f"Successfully parsed JSON match #{i+1}")
-                    
+            
                     # Check that we have valid keys - either letter or character, and confidence
                     if ('letter' not in json_data and 'character' not in json_data) or 'confidence' not in json_data:
                         print(f"JSON match #{i+1} is missing required keys")
@@ -362,30 +362,30 @@ class VisionEvaluator:
                     confidence_raw = json_data.get("confidence", "0.5")
                     
                     # Handle confidence as string or number
-                    if isinstance(confidence_raw, (int, float)):
+                if isinstance(confidence_raw, (int, float)):
                         confidence = float(confidence_raw)
                         # Normalize if it's a percentage
                         confidence = confidence / 100.0 if confidence > 1 else confidence
                     else:
                         # Try to extract a number from the string
-                        try:
-                            confidence_val = float(re.sub(r'[^\d.]', '', confidence_raw))
-                            confidence = confidence_val / 100.0 if confidence_val > 1 else confidence_val
-                        except ValueError:
+                    try:
+                        confidence_val = float(re.sub(r'[^\d.]', '', confidence_raw))
+                        confidence = confidence_val / 100.0 if confidence_val > 1 else confidence_val
+                    except ValueError:
                             confidence = 0.5
-                    
+            
                     # Get feedback and clean any placeholders from it
-                    feedback = json_data.get("feedback", "No feedback provided")
+            feedback = json_data.get("feedback", "No feedback provided")
                     for pattern in placeholder_patterns:
                         feedback = re.sub(pattern, '', feedback)
-                    
+            
                     print(f"Extracted from JSON: letter=\'{letter}\', confidence={confidence:.2f}, feedback=\'{feedback[:50]}...\'")
                     print("--- EXTRACTION SUCCESSFUL (JSON) ---")
-                    return letter, confidence, feedback
-                    
-                except json.JSONDecodeError as e:
+            return letter, confidence, feedback
+            
+        except json.JSONDecodeError as e:
                     print(f"Not valid JSON: {str(e)}")
-                    
+            
                     # Try again with some preprocessing (some responses have unescaped quotes or invalid characters)
                     try:
                         # Replace single quotes with double quotes
@@ -425,15 +425,15 @@ class VisionEvaluator:
                                 confidence = confidence_val / 100.0 if confidence_val > 1 else confidence_val
                             except ValueError:
                                 confidence = 0.5
-                        
+                    
                         # Get feedback and clean any placeholders from it
-                        feedback = json_data.get("feedback", "No feedback provided")
+                    feedback = json_data.get("feedback", "No feedback provided")
                         for pattern in placeholder_patterns:
                             feedback = re.sub(pattern, '', feedback)
-                        
+                    
                         print(f"Extracted from fixed JSON: letter=\'{letter}\', confidence={confidence:.2f}, feedback=\'{feedback[:50]}...\'")
                         print("--- EXTRACTION SUCCESSFUL (FIXED JSON) ---")
-                        return letter, confidence, feedback
+                    return letter, confidence, feedback
                     except Exception as fix_error:
                         print(f"Failed to fix JSON: {str(fix_error)}")
             
@@ -481,8 +481,8 @@ class VisionEvaluator:
                     
                 except Exception as regex_error:
                     print(f"Failed to extract with regex: {str(regex_error)}")
-                    continue
-        
+                continue
+                
         # Clean placeholder text from the original response
         for pattern in placeholder_patterns:
             cleaned_text = re.sub(pattern, '', cleaned_text)
@@ -656,11 +656,11 @@ Tips:
                         feedback = f"The model could not provide detailed feedback on your sign for '{expected_sign}'."
                 else:
                     # For evaluation mode, provide a simpler message if we don't have good feedback
-                    if expected_sign and letter.upper() == expected_sign.upper():
+                        if expected_sign and letter.upper() == expected_sign.upper():
                         # Always use the clean_response method to ensure no dash is returned
                         feedback = self._clean_response(feedback, letter)
                     elif not feedback or len(feedback) < 20:
-                        feedback = f"The model detected the sign as '{letter}'."
+                            feedback = f"The model detected the sign as '{letter}'."
                 
                 return {
                     'success': True,
