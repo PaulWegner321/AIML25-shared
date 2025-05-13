@@ -208,7 +208,10 @@ def get_asl_prediction(image_path: str, strategy: str = "zero_shot") -> Dict[str
         visibility_test_payload = {
             "model_id": MODEL_ID,
             "project_id": WATSONX_PROJECT_ID,
-            "messages": visibility_test_messages
+            "messages": visibility_test_messages,
+            "temperature": 0.05,
+            "top_p": 1.0,
+            "max_tokens": 300
         }
         
         # Make the visibility test API request
@@ -250,7 +253,10 @@ def get_asl_prediction(image_path: str, strategy: str = "zero_shot") -> Dict[str
         payload = {
             "model_id": MODEL_ID,
             "project_id": WATSONX_PROJECT_ID,
-            "messages": messages
+            "messages": messages,
+            "temperature": 0.05,
+            "top_p": 1.0,
+            "max_tokens": 300
         }
         
         # Make the API request

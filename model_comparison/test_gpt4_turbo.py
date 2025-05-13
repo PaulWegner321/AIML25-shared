@@ -171,7 +171,8 @@ def get_asl_prediction(image_path: str, prompt_strategy: Literal["zero_shot", "f
                 }
             ],
             max_tokens=300,
-            temperature=0.0
+            temperature=0.05,
+            top_p=1.0
         )
         
         # Calculate response time

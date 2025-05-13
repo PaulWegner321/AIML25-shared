@@ -199,7 +199,10 @@ def get_asl_prediction(image_path: str, strategy: Literal["zero_shot", "few_shot
                         }
                     ]
                 }
-            ]
+            ],
+            "temperature": 0.05,
+            "top_p": 1.0,
+            "max_tokens": 300
         }
         
         # Make the visibility test API request
@@ -239,7 +242,10 @@ def get_asl_prediction(image_path: str, strategy: Literal["zero_shot", "few_shot
                         }
                     ]
                 }
-            ]
+            ],
+            "temperature": 0.05,
+            "top_p": 1.0,
+            "max_tokens": 300
         }
         
         # Make the API request
