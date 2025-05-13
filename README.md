@@ -13,7 +13,7 @@ This web application is an AI-powered learning tool that helps users master the 
 - **Detailed Instructions**: Step-by-step guides for performing signs
 - **Tips & Feedback**: Get helpful tips and immediate feedback on your signing
 - **Computer Vision Detection**: CNN-based ASL sign detection with MediaPipe hand tracking
-- **AI-Generated Feedback**: Leverages GPT-4V and Mistral for detailed sign analysis
+- **AI-Generated Feedback**: Leverages GPT-4o and LLaMa for detailed sign analysis
 - **Model Comparison Framework**: Comprehensive evaluation of multiple vision-language models on ASL recognition
 
 ## Tech Stack
@@ -32,7 +32,7 @@ This web application is an AI-powered learning tool that helps users master the 
 - MediaPipe for hand tracking
 - PyTorch for CNN model inference
 - GPT-4 Vision for image analysis
-- Mistral for feedback generation
+- LLaMa for feedback generation and sign explanation
 
 ## Project Structure
 
@@ -45,29 +45,21 @@ This web application is an AI-powered learning tool that helps users master the 
 │   │   └── styles/               # Global styles
 │   └── public/                   # Static assets
 │
-├── backend/                     # FastAPI backend application
-│   ├── app/
-│   │   ├── models/               # ML models
-│   │   │   ├── weights/          # Model weights storage
-│   │   │   │   ├── cnn_model.pth  # CNN model weights
-│   │   │   │   └── new_cnn_model.pth  # New CNN model weights
-│   │   │   ├── new_cnn_model.py  # CNN model architecture
-│   │   │   └── keypoint_detector.py  # Hand detection models
-│   │   ├── services/             # AI services and business logic
-│   │   ├── schemas/              # Pydantic schemas
-│   │   ├── config/               # Configuration files
-│   │   └── main.py               # Main FastAPI application
-│   ├── render.yaml               # Render deployment configuration
-│   └── requirements.txt          # Python dependencies
-│
-└── model_comparison/            # VLM model evaluation framework
-    ├── data/                    # ASL image dataset (A-Z folders)
-    ├── test_*.py                # Individual model test scripts
-    ├── evaluate_models.py       # Evaluation framework
-    ├── dataset_creation/        # Tools for dataset creation
-    ├── Notebooks/               # Jupyter notebooks for development
-    ├── evaluation_results/      # Model evaluation results
-    └── requirements.txt         # Python dependencies for model testing
+└── backend/                     # FastAPI backend application
+    ├── app/
+    │   ├── models/               # ML models
+    │   │   ├── weights/          # Model weights storage
+    │   │   │   ├── cnn_model.pth  # CNN model weights
+    │   │   │   └── new_cnn_model.pth  # New CNN model weights
+    │   │   ├── new_cnn_model.py  # CNN model architecture
+    │   │   └── keypoint_detector.py  # Hand detection models
+    │   ├── services/             # AI services and business logic
+    │   ├── schemas/              # Pydantic schemas
+    │   ├── config/               # Configuration files
+    │   └── main.py               # Main FastAPI application
+    ├── render.yaml               # Render deployment configuration
+    └── requirements.txt          # Python dependencies
+
 ```
 
 ## Local Development
