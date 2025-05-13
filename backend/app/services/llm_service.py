@@ -423,7 +423,7 @@ class LLMService:
                     pass
                 else:
                     # For regular responses, consider shortening very long ones
-                parts = assistant_response.split('. ', 1)
+                    parts = assistant_response.split('. ', 1)
                     if len(parts) > 1 and len(parts[0]) < 50 and len(assistant_response) > 200:
                         assistant_response = parts[0].strip() + "."
 
