@@ -249,7 +249,10 @@ def get_asl_prediction(image_path: str, strategy: Literal["zero_shot", "few_shot
                         }
                     ]
                 }
-            ]
+            ],
+            "temperature": 0.05,
+            "top_p": 1.0,
+            "max_tokens": 300
         }
         
         result = make_api_request(token, payload)

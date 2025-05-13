@@ -211,7 +211,10 @@ def get_asl_prediction(image_path: str, strategy: str = "zero_shot") -> Dict[str
         payload = {
             "model_id": MODEL_ID,
             "project_id": WATSONX_PROJECT_ID,
-            "messages": messages
+            "messages": messages,
+            "temperature": 0.05,
+            "top_p": 1.0,
+            "max_tokens": 300
         }
         
         # Make the API request

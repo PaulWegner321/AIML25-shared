@@ -12,7 +12,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 # Define the dataset structure
 BASE_DIR = "data"
-LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ") + ["SPACE", "DELETE"]
+LETTERS = list("ABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
 def setup_directories():
     """Create the necessary directories for the dataset."""
