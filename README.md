@@ -38,6 +38,12 @@ This web application is an AI-powered learning tool that helps users master the 
 
 ```
 .
+├── app/                         # Next.js application files at root level
+│   ├── components/              # React components
+│   ├── api/                     # API routes
+│   ├── utils/                   # Utility functions
+│   ├── page.tsx                 # Main page component
+│   └── types.d.ts               # TypeScript type definitions
 ├── frontend/                     # Next.js frontend application
 │   ├── src/
 │   │   ├── app/                  # Next.js app router pages
@@ -45,7 +51,7 @@ This web application is an AI-powered learning tool that helps users master the 
 │   │   └── styles/               # Global styles
 │   └── public/                   # Static assets
 │
-└── backend/                     # FastAPI backend application
+├── backend/                     # FastAPI backend application
     ├── app/
     │   ├── models/               # ML models
     │   │   ├── weights/          # Model weights storage
@@ -59,10 +65,19 @@ This web application is an AI-powered learning tool that helps users master the 
     │   └── main.py               # Main FastAPI application
     ├── render.yaml               # Render deployment configuration
     └── requirements.txt          # Python dependencies
-
+├── start.sh                     # Convenience script to start both frontend and backend
 ```
 
 ## Local Development
+
+### Quickstart
+
+You can start both the frontend and backend with the provided convenience script:
+
+```bash
+chmod +x start.sh  # Make the script executable (first time only)
+./start.sh
+```
 
 ### Frontend Setup
 
